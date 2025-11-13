@@ -1015,6 +1015,7 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
         # --- START OF MODIFIED BLOCK FOR EXPONENTIAL NOTATION CONTROL ---
 
         # Convert normalized result to string (Decimal supports to_normal_string)
+        print(result)
         if isinstance(result, str) and '/' in result:
             output_string = result
 
@@ -1030,7 +1031,7 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
 
         if output_prefix == "":
             output_prefix = settings["default_output_format"]
-
+        print(output_string)
         if output_prefix == "decimal:":
             try:
                 Decimal(output_string)
@@ -1061,8 +1062,15 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
 
         elif output_prefix == "int:":
             try:
-                int(output_string)
-                return int(output_string)
+                int_value = int(output_string)
+                float_value = float(output_string)
+                if int_value != float_value:
+                    raise E.ConversionOutputError(
+                        f"Cannot convert non-integer value '{output_string}' to exact integer.",
+                        code="8005"
+                    )
+                else:
+                    return int(output_string)
             except Exception as e:
                 raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
 
@@ -1084,8 +1092,6 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
             code="3026",
             equation=problem
         )
-    # Fallback to next best format
-        # calculator.py (Except Block, um Zeile 1037)
 
     except E.ConversionOutputError as e:
         fallback_versuche = [ "decimal:", "boolean:", "string:"]

@@ -50,6 +50,6 @@ def main():
 if __name__ == "__main__":
     #print(change_setting("default_output_format", "boolean"))
     #print(load_one_setting("default_output_format"))
-    result = evaluate("i:0b11")
+    result = evaluate("i:3x=3")
     print(result)
     print(type(result))
