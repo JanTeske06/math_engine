@@ -49,13 +49,6 @@ def main():
 
 
 if __name__ == "__main__":
-
-    print(evaluate("int:2+2=2+2"))
-    print(type(evaluate("int:2+2=2+2")))
-
-    #print(evaluate("int:(0xFF)"))
-    #print(evaluate("int:sin(0xFF)"))
-    #print(type(evaluate("int:(0xFF)")))
-    #print(evaluate("sin(0xFF)"))
-    #print(evaluate("2+2-level+pi", level = 1))
-    #print(math_engine.calculator.int_to_hex("255"))
+    result = evaluate("h:2+2=4")
+    print(result)
+    print(type(result))

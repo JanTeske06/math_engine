@@ -5,5 +5,6 @@
     "fractions": false,
     "allow_hex": true,
     "all_hex": true,
-    "debug" : false
+    "debug" : false,
+    "correct_output_format": true
 }

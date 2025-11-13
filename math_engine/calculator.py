@@ -870,8 +870,8 @@ def hex_to_int(hex):
 
 
 
-def int_to_hex(number):
-    if isinstance(number, (Decimal, float)) and number % 1 != 0:
+def convert_to_hex(number):
+    if isinstance(number, (Decimal, float, int)) and number % 1 != 0:
         raise E.ConversionError("Cannot convert non-integer value to hex.", code="8003")
     try:
         if isinstance(number, Decimal):
@@ -931,6 +931,8 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
                     output_prefix = "float:"
                 elif prefix.startswith("i") or prefix.startswith("I"):
                     output_prefix = "int:"
+                elif prefix.startswith("h") or prefix.startswith("H"):
+                    output_prefix = "hexadecimal:"
                 problem = problem[len(prefix):]
                 break
 
@@ -1008,6 +1010,13 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
             except Exception as e:
                 raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
 
+        elif output_prefix == "hexadecimal:":
+            try:
+                convert_to_hex(output_string)
+                return convert_to_hex(output_string)
+            except Exception as e:
+                raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
+
         elif output_prefix == "boolean:":
             try:
                 boolean(output_string)
@@ -1045,30 +1054,29 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
 
     except E.ConversionOutputError as e:
         fallback_versuche = [ "decimal:", "boolean:", "string:"]
+        if settings["correct_output_format"] == True:
+            for versuch in fallback_versuche:
+                try:
+                    if versuch == "decimal:":
+                        if isDecimal(output_string) != False:
+                            return Decimal(output_string)
 
-        for versuch in fallback_versuche:
-            try:
-                if versuch == "decimal:":
-                    if isDecimal(output_string) != False:
-                        return Decimal(output_string)
+                    elif versuch == "boolean:":
+                        bool_result = boolean(output_string)
+                        if bool_result in (True, False):
+                            return bool_result
 
-                elif versuch == "boolean:":
-                    bool_result = boolean(output_string)
-                    if bool_result in (True, False):
-                        return bool_result
+                    elif versuch == "string:":
+                        print("x")
+                        return str(output_string)
 
-                elif versuch == "string:":
-                    print("x")
-                    return str(output_string)
-
-            except Exception as e:
-                continue
-
-        # Wenn die Schleife beendet ist, sind ALLE Fallbacks fehlgeschlagen.
-        raise E.ConversionError(
-            f"Konnte das Ergebnis '{output_string}' nicht in einen gültigen Typ konvertieren.",
-            code="8007"
-        )
+                except Exception as e:
+                    continue
+        else:
+            raise E.ConversionError(
+                f"Couldnt convert result '{output_string}' into '{output_prefix}'",
+                code="8007"
+            )
     # Re-raise our domain errors after attaching the source equation
     except E.MathError as e:
         e.equation = problem
