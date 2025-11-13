@@ -1,0 +1,68 @@
+name: Publish Package to PyPI and GHCR
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build Distribution
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+
+    - name: Build sdist and wheel
+      run: python -m build
+
+    - name: Store distribution files
+      uses: actions/upload-artifact@v4
+      with:
+        name: python-package-dist
+        path: dist/
+
+  publish:
+    name: Publish to Registries
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download distribution files
+      uses: actions/download-artifact@v4
+      with:
+        name: python-package-dist
+        path: dist/
+
+    - name: Install Twine (for GHCR upload)
+      run: pip install twine
+
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        password: ${{ secrets.PYPI_API_TOKEN }}
+
+    - name: Publish to GitHub Packages
+      env:
+        TWINE_USERNAME: ${{ github.actor }}
+        TWINE_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Dies ist die spezielle URL für GitHub Packages für Python-Pakete.
+        # ${{ github.repository }} wird automatisch zu "BENUTZER/REPOSITORY" aufgelöst.
+        TWINE_REPOSITORY_URL="https://python.pkg.github.com/${{ github.repository }}"
+        twine upload --repository-url $TWINE_REPOSITORY_URL dist/*

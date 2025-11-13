@@ -37,5 +37,5 @@ def main():
 
 
 if __name__ == "__main__":
-    print(change_setting("decimal_places", "a"))
+    print(evaluate("2+2-level+pi", {"level": 1}))
 
