@@ -38,15 +38,26 @@ getcontext().prec = 10000
 
 def boolean(value):
     try:
-        if isinstance(value, str, bool):
+        if isinstance(value, (str, bool)):
             if value == "True" or value == True:
                 return True
             elif value == "False" or value == False:
                 return False
             else:
-                return -1
+                raise E.ConversionError("Couldnt convert type to bool", code = "8003")
     except Exception as e:
         raise E.ConversionError("Couldnt convert type to bool", code = "8003")
+
+def isDecimal(value):
+    if isinstance(value, Decimal):
+        return True
+    try:
+        Decimal(value)
+        return True
+    except Exception as e:
+        return False
+    return False
+
 
 def get_line_number():
     """Return the caller line number (small debug helper)."""
@@ -898,22 +909,18 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
     debug = settings.get("debug", False)
     var_list = []
     allowed_prefix = (
-        "decimal:", "DECIMAL:", "Decimal:", "decimal", "DECIMAL", "Decimal",
-
-        "string:", "STRING:", "String:", "string:", "STRING:", "String:",
-
-        "bool:", "BOOL:", "Bool:", "bool:", "BOOL:", "Bool:",
-
-        "float:", "FLOAT:", "Float:", "float:", "FLOAT:", "Float:",
-
-        "int:", "INT:", "Int:", "int:", "INT:", "Int:",
-
-        "strin:", "STRIN:", "Strin:", "strin:", "STRIN:", "Strin:","str:", "STR:", "Str:", "str:", "STR:", "Str:",
+        "dec:", "d:", "Decimal:",
+        "int:", "i:", "integer:",
+        "float:", "f:",
+        "bool:", "b:", "boolean:",
+        "hex:", "h:", "hexadecimal:",
+        "str:", "s:", "string:"
     )
     output_prefix = ""
+    problem_lower = problem.lower()
     try:
         for prefix in allowed_prefix:
-            if problem.startswith(prefix):
+            if problem_lower.startswith(prefix):
                 if prefix.startswith("s")or prefix.startswith("S"):
                     output_prefix = "string:"
                 elif prefix.startswith("b")or prefix.startswith("B"):
@@ -947,9 +954,13 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
             right_val = final_tree.right.evaluate()
             output_string = "True" if left_val == right_val else "False"
             if output_prefix != "boolean:" and output_prefix != "string:" and output_prefix != "":
-                raise E.ConversionError("Couldnt convert result into the given prefix", code = "8006")
-            output_prefix = boolean(output_string)
-            #return output_string
+                raise E.ConversionOutputError("Couldnt convert result into the given prefix", code = "8006")
+            if output_prefix == "boolean:":
+                try:
+                    boolean(output_string)
+                    return boolean(output_string)
+                except Exception as e:
+                    raise E.ConversionError("Couldnt convert type to" + str(output_prefix), code="8003")
 
         else:
             # Mixed/invalid states with or without '=' and variables
@@ -964,6 +975,7 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
                 raise E.CalculationError("The calculator was called on an equation.", code="3015")
 
         # Render result based on settings (fractions/decimals, rounding flag)
+
         result, rounding = cleanup(result)
         approx_sign = "\u2248"  # "≈"
 
@@ -987,35 +999,35 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
                 Decimal(output_string)
                 return Decimal(output_string)
             except Exception as e:
-                raise E.ConversionError("Couldnt convert type to" + str(output_prefix), code="8003")
+                raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
 
         elif output_prefix == "string:":
             try:
                 str(output_string)
                 return str(output_string)
             except Exception as e:
-                raise E.ConversionError("Couldnt convert type to" + str(output_prefix), code="8003")
+                raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
 
         elif output_prefix == "boolean:":
             try:
                 boolean(output_string)
                 return boolean(output_string)
             except Exception as e:
-                raise E.ConversionError("Couldnt convert type to" + str(output_prefix), code = "8003")
+                raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code = "8003")
 
         elif output_prefix == "int:":
             try:
                 int(output_string)
                 return int(output_string)
             except Exception as e:
-                raise E.ConversionError("Couldnt convert type to" + str(output_prefix), code="8003")
+                raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
 
         elif output_prefix == "float:":
             try:
                 float(output_string)
                 return float(output_string)
             except Exception as e:
-                raise E.ConversionError("Couldnt convert type to" + str(output_prefix), code="8003")
+                raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
 
         else:
             raise E.SyntaxError("Unknown Error", code = "9999")
@@ -1027,6 +1039,35 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
             message="Number too large (Arithmetic overflow).",
             code="3026",
             equation=problem
+        )
+    # Fallback to next best format
+        # calculator.py (Except Block, um Zeile 1037)
+
+    except E.ConversionOutputError as e:
+        fallback_versuche = [ "decimal:", "boolean:", "string:"]
+
+        for versuch in fallback_versuche:
+            try:
+                if versuch == "decimal:":
+                    if isDecimal(output_string) != False:
+                        return Decimal(output_string)
+
+                elif versuch == "boolean:":
+                    bool_result = boolean(output_string)
+                    if bool_result in (True, False):
+                        return bool_result
+
+                elif versuch == "string:":
+                    print("x")
+                    return str(output_string)
+
+            except Exception as e:
+                continue
+
+        # Wenn die Schleife beendet ist, sind ALLE Fallbacks fehlgeschlagen.
+        raise E.ConversionError(
+            f"Konnte das Ergebnis '{output_string}' nicht in einen gültigen Typ konvertieren.",
+            code="8007"
         )
     # Re-raise our domain errors after attaching the source equation
     except E.MathError as e:

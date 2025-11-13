@@ -50,6 +50,10 @@ class SolverError(MathError):
 class ConversionError(MathError):
     pass
 
+class ConversionOutputError(MathError):
+    pass
+
+
 
 # ---------------------------------------------------------------------------
 # Error families (first digit) for quick categorization in logs/telemetry.

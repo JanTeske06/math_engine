@@ -50,7 +50,8 @@ def main():
 
 if __name__ == "__main__":
 
-    print(evaluate("bool:2+2"))
+    print(evaluate("int:2+2=2+2"))
+    print(type(evaluate("int:2+2=2+2")))
 
     #print(evaluate("int:(0xFF)"))
     #print(evaluate("int:sin(0xFF)"))
