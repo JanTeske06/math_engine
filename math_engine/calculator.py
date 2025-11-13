@@ -56,7 +56,6 @@ def isDecimal(value):
         return True
     except Exception as e:
         return False
-    return False
 
 
 def get_line_number():
@@ -834,7 +833,7 @@ def cleanup(result):
 
 
     # Legacy float/int handling (in case evaluation produced non-Decimal)
-    elif isinstance(result, (int, float)):
+    elif isinstance(result, (int, float)) and not isinstance(result, bool):
         if result == int(result):
             return int(result), rounding
 
@@ -955,6 +954,7 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
             left_val = final_tree.left.evaluate()
             right_val = final_tree.right.evaluate()
             output_string = "True" if left_val == right_val else "False"
+            result = (left_val == right_val)
             if output_prefix != "boolean:" and output_prefix != "string:" and output_prefix != "":
                 raise E.ConversionOutputError("Couldnt convert result into the given prefix", code = "8006")
             if output_prefix == "boolean:":
@@ -986,6 +986,7 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
         # Convert normalized result to string (Decimal supports to_normal_string)
         if isinstance(result, str) and '/' in result:
             output_string = result
+
         elif isinstance(result, Decimal):
             # Threshold for scientific notation: 1 Billion (1e9)
             scientific_threshold = Decimal('1e9')
@@ -1005,7 +1006,7 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
 
         elif output_prefix == "string:":
             try:
-                str(output_string)
+                #str(output_string)
                 return str(output_string)
             except Exception as e:
                 raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
