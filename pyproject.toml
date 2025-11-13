@@ -1,0 +1,22 @@
+# pyproject.toml
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "math-engine-chaos"  # WICHTIG: Muss eindeutig auf PyPI sein
+version = "0.1.0"
+authors = [
+  { name="Jan Teske", email="jan.teske.06@gmail.com" },
+]
+description = "A fast and secure mathematical expression evaluator."
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+]

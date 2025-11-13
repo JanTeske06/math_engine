@@ -114,6 +114,7 @@ ERROR_MESSAGES = {
     "3028": "Missing Number before an operator",
     "3029": "Missing Operator",
     "3030": "Augmented assignment not allowed with variables.",
+    "3031": "Boolean in equation",
 
     # 4xxx — UI/settings/runtime integration
     "4700": "Process already running",

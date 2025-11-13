@@ -1,10 +1,14 @@
-from decimal import Decimal, getcontext, Overflow
-import fractions
-import inspect
-import MathEngine
+# from . import calculator
+# from . import config_manager as config_manager
+# from . import error as E
+
+
+import calculator
 import config_manager as config_manager
-import ScientificEngine
 import error as E
+
+
+
 from typing import Union
 import time
 
@@ -27,8 +31,10 @@ def load_one_setting(setting):
     print(settings)
     return settings
 
-def evaluate(problem: str):
-    result= MathEngine.calculate(problem)
+def evaluate(problem: str,  custom_variables: Union[dict, None] = None):
+    if custom_variables is None:
+        custom_variables = {}
+    result= calculator.calculate(problem, custom_variables)
     if isinstance(result, E.MathError):
         error_obj = result
         error_code = error_obj.code
@@ -37,11 +43,14 @@ def evaluate(problem: str):
     return result
 
 def main():
-    problem = "√(-1)"
     try:
-        result = evaluate(problem)
-        print(f"Das Ergebnis ist: {result}")
-        print(type(result))
+        test_vars = {
+            "LEVEL": 0.5,
+            "ENABLED": 1,
+        }
+        problem_string = "y = 1"
+        result = evaluate(problem_string, test_vars)
+        print(result)
 
     except E.MathError as e:
         print(e)

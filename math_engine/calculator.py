@@ -1,4 +1,4 @@
-# MathEngine.py
+# calculator.py
 """
 Core calculation engine for the Advanced Python Calculator.
 
@@ -12,14 +12,19 @@ Pipeline
 4) Formatter: renders results using Decimal/Fraction and user preferences.
 """
 
-import sys
 from decimal import Decimal, getcontext, Overflow
 import fractions
 import inspect
+from typing import Union
+import math
+# from . import config_manager as config_manager
+# from . import ScientificEngine
+# from . import error as E
 
+import calculator
 import config_manager as config_manager
-import ScientificEngine
 import error as E
+import ScientificEngine
 
 # Debug toggle for optional prints in this module
 debug = False
@@ -257,7 +262,25 @@ class BinOp:
 # Tokenizer
 # -----------------------------
 
-def translator(problem):
+RAW_FUNCTION_MAP = {
+    "sin(": 'sin',
+    "cos(": 'cos',
+    "tan(": 'tan',
+    "log(": 'log',
+    "e^(": 'e^',
+    "√(": '√',
+    "sqrt(": "√",
+    "pi" : "π",
+    "PI" : "π",
+    "Pi" : "π"
+}
+FUNCTION_STARTS_OPTIMIZED = {
+    start_str: (token, len(start_str))
+    for start_str, token in RAW_FUNCTION_MAP.items()
+}
+
+
+def translator(problem, custom_variables):
     """Convert raw input string into a token list (numbers, ops, parens, variables, functions).
 
     Notes:
@@ -269,9 +292,41 @@ def translator(problem):
     full_problem = []
     b = 0
 
+    CONTEXT_VARS = {}
+    for var_name, value in custom_variables.items():
+
+        if isinstance(value, (int, float, Decimal)):
+            CONTEXT_VARS[var_name] = str(value)
+        elif isinstance(value, bool):
+            CONTEXT_VARS[var_name] = "1" if value else "0"
+        else:
+            CONTEXT_VARS[var_name] = str(value)
+
+    sorted_vars = sorted(CONTEXT_VARS.keys(), key=len, reverse=True)
+
+    temp_problem = problem
+    for var_name in sorted_vars:
+        value_str = CONTEXT_VARS[var_name]
+        temp_problem = temp_problem.replace(var_name, value_str)
+
+    problem = temp_problem
+
+
     while b < len(problem):
+        found_function = False
         current_char = problem[b]
 
+
+        for start_str, (token, length) in FUNCTION_STARTS_OPTIMIZED.items():
+            if problem.startswith(start_str, b):
+                full_problem.append(token)
+                if token != "π" and token != "E" and token != "e":
+                    full_problem.append("(")
+                b += length - 0
+                found_function = True
+                break
+        if found_function:
+            continue
         # --- Numbers: digits and decimal separator (EXPONENTIAL NOTATION SUPPORT ADDED) ---
         if isInt(current_char) or (b >= 0 and current_char == "."):
             str_number = current_char
@@ -341,32 +396,10 @@ def translator(problem):
             full_problem.append(",")
 
         # --- Scientific functions and special forms: sin(, cos(, tan(, log(, √(, e^( ---
-        elif ((((current_char) == 's' or (current_char) == 'c' or (current_char) == 't' or (
-                current_char) == 'l') and len(problem) - b >= 5) or
-              (current_char == '√' and len(problem) - b >= 2) or
-              (current_char == 'e' and len(problem) - b >= 3)):
 
-            if (current_char == '√' and problem[b + 1] == '('):
-                full_problem.append('√')
-                full_problem.append('(')
-                b = b + 1
-            elif (current_char == 'e' and problem[b + 1] == '^' and problem[b + 2] == '('):
-                full_problem.append('e^')
-                full_problem.append('(')
-                b = b + 2
 
-            elif (current_char in ['s', 'c', 't', 'l'] and len(problem) >= 3):
-                # Validate presence of opening parenthesis after function name
-                if len(problem) - b >= 4 and problem[b:b + 3] in ['sin', 'cos', 'tan', 'log']:
-                    if problem[b + 3] == '(':
-                        full_problem.append(problem[b:b + 3])
-                        full_problem.append('(')
-                        b += 3
-                    else:
-                        raise E.CalculationError(f"Missing parenthesis after: '{problem[b:b + 3]}", code="3010")
-                elif len(problem) - b == 3 and problem[b:b + 3] in ['sin', 'cos', 'tan', 'log']:
-                    # Function name at end without '('
-                    raise E.CalculationError(f"Missing parenthesis after: '{problem[b:b + 3]}", code="3023")
+
+
 
         # --- Constant π ---
         elif current_char == 'π':
@@ -433,7 +466,7 @@ def translator(problem):
 # Parser (recursive descent)
 # -----------------------------
 
-def ast(received_string, settings):
+def ast(received_string, settings, custom_variables):
     """Parse a token stream into an AST.
     Implements precedence via nested functions: factor → unary → power → term → sum → equation.
 
@@ -441,7 +474,7 @@ def ast(received_string, settings):
     augmented assignment patterns like `12+=6`):
       - settings["allow_augmented_assignment"] → influences pre-parse validation/rewrites.
     """
-    analysed, var_counter = translator(received_string)
+    analysed, var_counter = translator(received_string, custom_variables)
 
     # Normalize spurious leading/trailing '=' if there's no variable; keep equations intact
     if analysed and analysed[0] == "=" and not "var0" in analysed:
@@ -558,6 +591,9 @@ def ast(received_string, settings):
 
                 # Delegate to scientific engine; keep result as-is for Number()
                 result_string = ScientificEngine.unknown_function(ScienceOp)
+                if isinstance(result_string, str) and result_string.startswith("ERROR:"):
+                    # Wenn ScientificEngine einen Fehler meldet, werfe ihn als SyntaxError
+                    raise E.SyntaxError(result_string, code="3218")
                 try:
                     calculated_value = result_string
                     return Number(calculated_value)
@@ -732,7 +768,7 @@ def cleanup(result):
 
         if result % 1 == 0:
             # Integer result – return normalized without rounding
-            return result.normalize(), rounding
+            return result, rounding
         else:
             # Non-integer result (e.g. 1/3 or repeating decimals)
             getcontext().prec = 10000  # Prevent quantize overflow
@@ -748,7 +784,7 @@ def cleanup(result):
             if rounded_result != result:
                 rounding = True
 
-            return rounded_result.normalize(), rounding
+            return rounded_result, rounding
 
 
     # Legacy float/int handling (in case evaluation produced non-Decimal)
@@ -777,14 +813,16 @@ def cleanup(result):
 # Public entry point
 # -----------------------------
 
-def calculate(problem):
+def calculate(problem: str, custom_variables: Union[dict, None] = None):
+    if custom_variables is None:
+        custom_variables = {}
     """Main API: parse → (evaluate | solve | equality-check) → format → render string."""
     # Guard precision locally before each calculation (UI may adjust as well)
     getcontext().prec = 10000
     settings = config_manager.load_setting_value("all")  # NEW: pass UI settings down to parser
     var_list = []
     try:
-        final_tree, cas, var_counter = ast(problem, settings)  # NEW: settings param enables AA handling
+        final_tree, cas, var_counter = ast(problem, settings, custom_variables)  # NEW: settings param enables AA handling
 
         # Decide evaluation mode
         if cas and var_counter > 0:
@@ -882,5 +920,7 @@ def test_main():
     problem = input()
     result = calculate(problem)
     print(result)
-    # test_main()  # recursive call disabled
+    test_main()  # recursive call disabled
 
+if __name__ == "__main__":
+    test_main()
