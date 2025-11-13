@@ -50,6 +50,8 @@ def main():
 if __name__ == "__main__":
     #print(change_setting("default_output_format", "boolean"))
     #print(load_one_setting("default_output_format"))
-    result = evaluate("i:3x=3")
+    problem = "int:(0xFF + 0b1101) / 3^2 + 4.5 = x"
+    problem = "int:(0xFF + 0b1101) / 3^2 + 4.5 = x"
+    result = evaluate(problem)
     print(result)
     print(type(result))

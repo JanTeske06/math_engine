@@ -1015,7 +1015,6 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
         # --- START OF MODIFIED BLOCK FOR EXPONENTIAL NOTATION CONTROL ---
 
         # Convert normalized result to string (Decimal supports to_normal_string)
-        print(result)
         if isinstance(result, str) and '/' in result:
             output_string = result
 
@@ -1031,7 +1030,6 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
 
         if output_prefix == "":
             output_prefix = settings["default_output_format"]
-        print(output_string)
         if output_prefix == "decimal:":
             try:
                 Decimal(output_string)
@@ -1108,7 +1106,6 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
                             return bool_result
 
                     elif versuch == "string:":
-                        print("x")
                         return str(output_string)
 
                 except Exception as e:
