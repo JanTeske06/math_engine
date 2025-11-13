@@ -17,14 +17,14 @@ import fractions
 import inspect
 from typing import Union
 import math
-# from . import config_manager as config_manager
-# from . import ScientificEngine
-# from . import error as E
+from . import config_manager as config_manager
+from . import ScientificEngine
+from . import error as E
 
-import calculator
-import config_manager as config_manager
-import error as E
-import ScientificEngine
+#import calculator
+# import config_manager as config_manager
+# import error as E
+# import ScientificEngine
 
 # Debug toggle for optional prints in this module
 debug = False
