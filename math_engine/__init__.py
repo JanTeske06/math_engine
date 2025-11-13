@@ -48,7 +48,6 @@ def main():
 
 
 if __name__ == "__main__":
-    print(change_setting("decimal_places", 3))
-    result = evaluate("i:0x2222")
+    result = evaluate("hex:0b11")
     print(result)
     print(type(result))

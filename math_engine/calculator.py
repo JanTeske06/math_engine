@@ -353,64 +353,85 @@ def translator(problem, custom_variables, settings):
             str_number = current_char
             has_decimal_point = False  # Only one dot allowed in a numeric literal
             has_exponent_e = False  # Only one 'e' or 'E' allowed
+
+            allowed_char_hex = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "a", "b","c", "d", "e", "f"}
+            allowed_char_octal = {"0", "1", "2", "3", "4", "5", "6", "7"}
+            allowed_char_binary = {"0", "1"}
+            non_decimal_flags = {"b", "B", "x", "X", "o", "O"}
+            forbidden_char = {".", ","}
+
+            prefix_name = ""
+            value_prefix = ""
+
+
             if b <= len(problem)+1:
-                if problem[b+1] == "x":
-                    allowed_char = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "a", "b", "c", "d","e", "f"}
-                    forbidden_char = {".", ","}
-                    hex_number = "0x"
-                    if int(current_char) == 0 and problem[b+1] == "x" and settings["allow_hex"] == True:
-                        a =b+2
-                        while (a < len(problem)):
-                            if problem[a] in forbidden_char:
-                                raise E.ConversionError("Unexpected token in hex:" + str(problem[a]), code="8004")
-                            elif problem[a] in allowed_char:
-                                hex_number += problem[a]
-                            else:
+                if int(current_char) == 0 and problem[b+1] in non_decimal_flags and settings["allow_non_decimal"] == True:
+                    if problem[b+1] == "b" or problem[b+1] == "B":
+                        value_prefix = "0b"
+                        prefix_name = "Binary"
+                        allowed_char = allowed_char_binary
+
+                    elif problem[b+1] == "x" or problem[b+1] == "X":
+                        value_prefix = "0x"
+                        prefix_name = "Hexadecimal"
+                        allowed_char = allowed_char_hex
+
+                    elif problem[b+1] == "o" or problem[b+1] == "O":
+                        value_prefix = "0o"
+                        prefix_name = "Octal"
+                        allowed_char = allowed_char_octal
+
+                    a =b+2
+                    while (a < len(problem)):
+                        if problem[a] in forbidden_char:
+                            raise E.ConversionError(f"Unexpected token in {prefix_name}:" + str(problem[a]), code="8004")
+                        elif problem[a] in allowed_char:
+                            value_prefix += problem[a]
+                        else:
+                            break
+                        a += 1
+
+                    str_number = value_to_int(str(value_prefix))
+                    current_char = str_number
+                    b=a-1
+
+
+
+
+                else:
+                # Continue reading the number part
+                    while (b + 1 < len(problem)):
+                        next_char = problem[b + 1]
+
+
+                        # 1. Handle decimal points
+                        if next_char == ".":
+                            if has_decimal_point:
+                                raise E.SyntaxError("Double decimal point.", code="3008")
+                            has_decimal_point = True
+
+                        # 2. Handle the 'E' or 'e' for exponent
+                        elif next_char in ('e', 'E'):
+                            if has_exponent_e:
+                                # Cannot have two 'e's in a single number
+                                raise E.SyntaxError("Double exponent sign 'E'/'e'.", code="3031")
+                            has_exponent_e = True
+
+                        # 3. Handle the sign (+ or -) immediately following 'E'/'e'
+                        elif next_char in ('+', '-'):
+                            # The sign is only valid if it immediately follows 'e' or 'E'
+                            if not (problem[b] in ('e', 'E') and has_exponent_e):
+                                # If it's not following 'e'/'E', it's a separate unary operator.
+                                # Break the loop to treat it as an operator in the next iteration.
                                 break
-                            a += 1
 
-                        str_number = hex_to_int(str(hex_number))
-                        current_char = str_number
-                        b=a-1
-                        #full_problem.append(Decimal(str_number))
+                        # 4. End the loop if the next character is not a number component
+                        elif not isInt(next_char):
+                            break
 
-
-
-
-                    else:
-                    # Continue reading the number part
-                        while (b + 1 < len(problem)):
-                            next_char = problem[b + 1]
-
-
-                            # 1. Handle decimal points
-                            if next_char == ".":
-                                if has_decimal_point:
-                                    raise E.SyntaxError("Double decimal point.", code="3008")
-                                has_decimal_point = True
-
-                            # 2. Handle the 'E' or 'e' for exponent
-                            elif next_char in ('e', 'E'):
-                                if has_exponent_e:
-                                    # Cannot have two 'e's in a single number
-                                    raise E.SyntaxError("Double exponent sign 'E'/'e'.", code="3031")
-                                has_exponent_e = True
-
-                            # 3. Handle the sign (+ or -) immediately following 'E'/'e'
-                            elif next_char in ('+', '-'):
-                                # The sign is only valid if it immediately follows 'e' or 'E'
-                                if not (problem[b] in ('e', 'E') and has_exponent_e):
-                                    # If it's not following 'e'/'E', it's a separate unary operator.
-                                    # Break the loop to treat it as an operator in the next iteration.
-                                    break
-
-                            # 4. End the loop if the next character is not a number component
-                            elif not isInt(next_char):
-                                break
-
-                            # If we made it here, the character is a valid part of the number (digit, dot, E/e, or sign after E/e)
-                            b += 1
-                            str_number += problem[b]
+                        # If we made it here, the character is a valid part of the number (digit, dot, E/e, or sign after E/e)
+                        b += 1
+                        str_number += problem[b]
 
             # Validate the final collected string
             if isfloat(str_number) or isInt(str_number):
@@ -854,16 +875,16 @@ def cleanup(result):
     # Fallback: unknown type, return as-is
     return result, rounding
 
-def hex_to_int(hex):
-    if not isinstance(hex, str):
+def value_to_int(value):
+    if not isinstance(value, str):
         raise E.ConversionError("Converter didnt receive string: " + str(type(hex)), code="8002")
     else:
         try:
-            hex = int(hex, 0)
-            return hex
+            value = int(value, 0)
+            return value
 
         except ValueError as e:
-            raise E.ConversionError(f"Couldnt convert hex to int: {e}", code="8000")
+            raise E.ConversionError(f"Couldnt convert {value} to int: {e}", code="8000")
 
         except Exception as e:
             raise E.ConversionError(f"Unexpected conversion error: {e}", code="8001")
@@ -912,9 +933,12 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
         "dec:", "d:", "Decimal:",
         "int:", "i:", "integer:",
         "float:", "f:",
-        "bool:", "b:", "boolean:",
+        "bool:", "bo", "boolean:",
         "hex:", "h:", "hexadecimal:",
         "str:", "s:", "string:"
+        "bin", "bi", "binary",
+        "oc", "o", "octal"
+
     )
     output_prefix = ""
     problem_lower = problem.lower()
@@ -923,7 +947,7 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
             if problem_lower.startswith(prefix):
                 if prefix.startswith("s")or prefix.startswith("S"):
                     output_prefix = "string:"
-                elif prefix.startswith("b")or prefix.startswith("B"):
+                elif prefix.startswith("bo")or prefix.startswith("Bo"):
                     output_prefix = "boolean:"
                 elif prefix.startswith("d") or prefix.startswith("D"):
                     output_prefix = "decimal:"
@@ -933,7 +957,13 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
                     output_prefix = "int:"
                 elif prefix.startswith("h") or prefix.startswith("H"):
                     output_prefix = "hexadecimal:"
-                problem = problem[len(prefix):]
+                elif prefix.startswith("bi") or prefix.startswith("Bi"):
+                    output_prefix = "binary:"
+                elif prefix.startswith("o") or prefix.startswith("O"):
+                    output_prefix = "octal:"
+
+                start = problem.index(":")
+                problem = problem[start+1:]
                 break
 
 
@@ -961,7 +991,7 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
             if output_prefix == "boolean:":
                 try:
                     boolean(output_string)
-                    return boolean(output_string)
+                    #return boolean(output_string)
                 except Exception as e:
                     raise E.ConversionError("Couldnt convert type to" + str(output_prefix), code="8003")
 

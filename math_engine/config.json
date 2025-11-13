@@ -3,8 +3,7 @@
     "use_degrees": false,
     "allow_augmented_assignment": true,
     "fractions": false,
-    "allow_hex": true,
-    "all_hex": true,
+    "allow_non_decimal": true,
     "debug": false,
     "correct_output_format": true
 }
