@@ -135,6 +135,7 @@ ERROR_MESSAGES = {
 
     "5000" : "Missmatch of values.", # +Error
     "5001" : "File not Found.",
+    "5002" : "Could not save config file.",
     
     "8000": "Error converting int to hex.",
     "8001": "Error converting hex to int.",

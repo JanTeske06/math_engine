@@ -48,6 +48,8 @@ def main():
 
 
 if __name__ == "__main__":
-    result = evaluate("hex:0b11")
+    #print(change_setting("default_output_format", "boolean"))
+    #print(load_one_setting("default_output_format"))
+    result = evaluate("i:0b11")
     print(result)
     print(type(result))

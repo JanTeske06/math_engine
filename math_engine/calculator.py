@@ -1028,7 +1028,10 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
         else:
             output_string = result
 
-        if output_prefix == "" or output_prefix == "decimal:":
+        if output_prefix == "":
+            output_prefix = settings["default_output_format"]
+
+        if output_prefix == "decimal:":
             try:
                 Decimal(output_string)
                 return Decimal(output_string)
