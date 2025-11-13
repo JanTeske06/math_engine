@@ -26,12 +26,12 @@ class MathError(Exception):
         code (str): 4-digit error code (see ERROR_MESSAGES)
         equation (str|None): original user input that caused the error
     """
-    def __init__(self, message, code="9999", equation=None):
+    def __init__(self, message, code="9999", equation=None, position: int = -1):
         super().__init__(message)
         self.message = message
         self.code = code
         self.equation = equation
-
+        self.position = position
 
 class SyntaxError(MathError):
     """Parsing/tokenization/parentheses or general syntax issues."""
@@ -55,7 +55,6 @@ class ConversionOutputError(MathError):
 
 class ConfigError(MathError):
     pass
-
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +125,7 @@ ERROR_MESSAGES = {
     "3029": "Missing Operator",
     "3030": "Augmented assignment not allowed with variables.",
     "3031": "Boolean in equation",
+    "3032": "Multiple digit variables not supported.",
 
     "4000" : "Couldnt find memory entry.",
 

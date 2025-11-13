@@ -1,3 +1,5 @@
+from email import message_from_string
+
 import math_engine.calculator
 from . import calculator
 from . import config_manager as config_manager
@@ -53,7 +55,7 @@ def evaluate(expr: str,
     global memory
     merged = dict(list(memory.items()) + list(merged.items()))
 
-    result = calculator.calculate(expr, merged)
+    result = calculator.calculate(expr, merged,1) # 0 = Validate, 1 = Calculate
 
     if isinstance(result, E.MathError):
         raise result
@@ -61,3 +63,43 @@ def evaluate(expr: str,
     return result
 
 
+def validate(expr: str,
+             variables: Optional[Mapping[str, Any]] = None,
+             **kwvars: Any) -> Any:
+    try:
+        explanation = False
+        if variables is None:
+            merged = dict(kwvars)
+        else:
+            merged = dict(variables)
+            merged.update(kwvars)
+        global memory
+        merged = dict(list(memory.items()) + list(merged.items()))
+
+        result = calculator.calculate(expr, merged, 0) # 0 = Validate, 1 = Calculate
+        return result
+
+    except E.MathError as e:
+        Errormessage = "Errormessage: "
+        code = "Code: "
+        Equation = "Equation: "
+        positon = e.position
+
+
+
+
+        print(Errormessage + str(e.message))
+        print(code + str(e.code))
+        if positon != -1:
+            calc_equation = str(e.equation)
+            print(Equation +calc_equation[:positon]+ "\033[4m" + calc_equation[positon] + "\033[0m"+ calc_equation[positon+1:])
+
+            print((positon+len(Equation)) * " " + "^ HERE IS THE PROBLEM (Position: " + str(positon) + ")")
+        else:
+            print(Equation + str(e.equation))
+
+
+
+if __name__ == '__main__':
+    print(validate("int:Level+3", Level = "1"))
+    #print(evaluate(("2+2+sin(8)")))

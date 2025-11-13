@@ -330,7 +330,7 @@ def translator(problem, custom_variables, settings):
 
     problem = temp_problem
 
-
+    temp_var = -1
     while b < len(problem):
         found_function = False
         current_char = problem[b]
@@ -346,7 +346,6 @@ def translator(problem, custom_variables, settings):
                 break
         if found_function:
             continue
-
 
         # --- Numbers: digits and decimal separator (EXPONENTIAL NOTATION SUPPORT ADDED) ---
         if isInt(current_char) or (b >= 0 and current_char == "."):
@@ -384,7 +383,7 @@ def translator(problem, custom_variables, settings):
                     a =b+2
                     while (a < len(problem)):
                         if problem[a] in forbidden_char:
-                            raise E.ConversionError(f"Unexpected token in {prefix_name}:" + str(problem[a]), code="8004")
+                            raise E.ConversionError(f"Unexpected token in {prefix_name}:" + str(problem[a]), code="8004", position=b+1)
                         elif problem[a] in allowed_char:
                             value_prefix += problem[a]
                         else:
@@ -407,14 +406,17 @@ def translator(problem, custom_variables, settings):
                         # 1. Handle decimal points
                         if next_char == ".":
                             if has_decimal_point:
-                                raise E.SyntaxError("Double decimal point.", code="3008")
+                                raise E.SyntaxError(f"Double decimal point.", code="3008", position=b+1)
                             has_decimal_point = True
 
                         # 2. Handle the 'E' or 'e' for exponent
                         elif next_char in ('e', 'E'):
+                            if temp_var == b and b > 0:
+                                raise E.SyntaxError(f"Multiple digit variables not supported.",
+                                                    code="3032", position=b+1)
                             if has_exponent_e:
                                 # Cannot have two 'e's in a single number
-                                raise E.SyntaxError("Double exponent sign 'E'/'e'.", code="3031")
+                                raise E.SyntaxError("Double exponent sign 'E'/'e'.", code="3031", position=b+1)
                             has_exponent_e = True
 
                         # 3. Handle the sign (+ or -) immediately following 'E'/'e'
@@ -439,7 +441,7 @@ def translator(problem, custom_variables, settings):
             else:
                 # This handles cases like '5E' without an exponent after it
                 if has_exponent_e and not str_number[-1].isdigit():
-                    raise E.SyntaxError("Missing exponent value after 'E'/'e'.", code="3032")
+                    raise E.SyntaxError("Missing exponent value after 'E'/'e'.", code="3032", position=b)
                 # If it's not a valid number, let the fallback handle it as a variable
                 # or raise an error in the original logic. We rely on the 'else' below.
 
@@ -475,15 +477,21 @@ def translator(problem, custom_variables, settings):
                 calculated_value = Decimal(result_string)
                 full_problem.append(calculated_value)
             except ValueError:
-                raise E.CalculationError(f"Error with constant π:{result_string}", code="3219")
+                raise E.CalculationError(f"Error with constant π:{result_string}", code="3219", position=b)
 
         # --- Variables (fallback) ---
         else:
+            print(full_problem)
+
+            if temp_var == b-1 and b > 0 and temp_var != -1:
+                raise E.SyntaxError(f"Multiple digit variables not supported.", code ="3032", position=b)
+
             # Map each new variable symbol to var{n} to keep internal representation uniform
             if current_char in var_list:
                 full_problem.append("var" + str(var_list.index(current_char)))
             else:
                 full_problem.append("var" + str(var_counter))
+                temp_var = b
                 var_list[var_counter] = current_char
                 var_counter += 1
 
@@ -493,6 +501,7 @@ def translator(problem, custom_variables, settings):
     # Insert '*' between adjacent tokens that imply multiplication:
     # number/variable/')' followed by '(' / number / variable / function name
     b = 0
+    print(full_problem)
     while b < len(full_problem):
 
         if b + 1 < len(full_problem):
@@ -525,7 +534,7 @@ def translator(problem, custom_variables, settings):
                 full_problem.insert(b + 1, '*')
 
         b += 1
-
+    print(full_problem)
     return full_problem, var_counter
 
 
@@ -557,7 +566,6 @@ def ast(received_string, settings, custom_variables):
     # NEW: Additional pre-parse validations / rewrites to support augmented assignment.
     if analysed:
         b = 0
-
         while b < len(analysed) - 1:
 
             # Case 1: operator directly followed by '=' (e.g., "+=") without AA allowed → error
@@ -918,7 +926,7 @@ def convert_to_hex(number):
 # Public entry point
 # -----------------------------
 
-def calculate(problem: str, custom_variables: Union[dict, None] = None):
+def calculate(problem: str, custom_variables: Union[dict, None] = None, validate : int = 0):
     if custom_variables is None:
         custom_variables = {}
 
@@ -968,24 +976,29 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
 
 
         final_tree, cas, var_counter = ast(problem, settings, custom_variables)  # NEW: settings param enables AA handling
+        if validate == 0:
+            result = final_tree
         if debug == True:
             print(final_tree)
         # Decide evaluation mode
         if cas and var_counter > 0:
             # Solve linear equation for first variable symbol in the token stream
             var_name_in_ast = "var0"
-            result = solve(final_tree, var_name_in_ast)
+            if validate == 1:
+                result = solve(final_tree, var_name_in_ast)
 
         elif not cas and var_counter == 0:
             # Pure numeric evaluation
-            result = final_tree.evaluate()
+            if validate == 1:
+                result = final_tree.evaluate()
 
         elif cas and var_counter == 0:
             # Pure equality check (no variable): returns "= True/False"
             left_val = final_tree.left.evaluate()
             right_val = final_tree.right.evaluate()
             output_string = "True" if left_val == right_val else "False"
-            result = (left_val == right_val)
+            if validate == 1:
+                result = (left_val == right_val)
             if output_prefix != "boolean:" and output_prefix != "string:" and output_prefix != "":
                 raise E.ConversionOutputError("Couldnt convert result into the given prefix", code = "8006")
             if output_prefix == "boolean:":
@@ -1008,79 +1021,81 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
                 raise E.CalculationError("The calculator was called on an equation.", code="3015")
 
         # Render result based on settings (fractions/decimals, rounding flag)
-
-        result, rounding = cleanup(result)
+        if validate == 1:
+            result, rounding = cleanup(result)
         approx_sign = "\u2248"  # "≈"
+        if validate == 1:
+            # --- START OF MODIFIED BLOCK FOR EXPONENTIAL NOTATION CONTROL ---
 
-        # --- START OF MODIFIED BLOCK FOR EXPONENTIAL NOTATION CONTROL ---
+            # Convert normalized result to string (Decimal supports to_normal_string)
+            if isinstance(result, str) and '/' in result:
+                output_string = result
 
-        # Convert normalized result to string (Decimal supports to_normal_string)
-        if isinstance(result, str) and '/' in result:
-            output_string = result
+            elif isinstance(result, Decimal):
+                # Threshold for scientific notation: 1 Billion (1e9)
+                scientific_threshold = Decimal('1e9')
+                output_string = result
+                if result.is_zero():
+                    output_string = "0"
 
-        elif isinstance(result, Decimal):
-            # Threshold for scientific notation: 1 Billion (1e9)
-            scientific_threshold = Decimal('1e9')
-            output_string = result
-            if result.is_zero():
-                output_string = "0"
+            else:
+                output_string = result
 
+            if output_prefix == "":
+                output_prefix = settings["default_output_format"]
+            if output_prefix == "decimal:":
+                try:
+                    Decimal(output_string)
+                    return Decimal(output_string)
+                except Exception as e:
+                    raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
+
+            elif output_prefix == "string:":
+                try:
+                    #str(output_string)
+                    return str(output_string)
+                except Exception as e:
+                    raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
+
+            elif output_prefix == "hexadecimal:":
+                try:
+                    convert_to_hex(output_string)
+                    return convert_to_hex(output_string)
+                except Exception as e:
+                    raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
+
+            elif output_prefix == "boolean:":
+                try:
+                    boolean(output_string)
+                    return boolean(output_string)
+                except Exception as e:
+                    raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code = "8003")
+
+            elif output_prefix == "int:":
+                try:
+                    int_value = int(output_string)
+                    float_value = float(output_string)
+                    if int_value != float_value:
+                        raise E.ConversionOutputError(
+                            f"Cannot convert non-integer value '{output_string}' to exact integer.",
+                            code="8005"
+                        )
+                    else:
+                        return int(output_string)
+                except Exception as e:
+                    raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
+
+            elif output_prefix == "float:":
+                try:
+                    float(output_string)
+                    return float(output_string)
+                except Exception as e:
+                    raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
+
+            else:
+                raise E.SyntaxError("Unknown Error", code = "9999")
         else:
-            output_string = result
-
-        if output_prefix == "":
-            output_prefix = settings["default_output_format"]
-        if output_prefix == "decimal:":
-            try:
-                Decimal(output_string)
-                return Decimal(output_string)
-            except Exception as e:
-                raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
-
-        elif output_prefix == "string:":
-            try:
-                #str(output_string)
-                return str(output_string)
-            except Exception as e:
-                raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
-
-        elif output_prefix == "hexadecimal:":
-            try:
-                convert_to_hex(output_string)
-                return convert_to_hex(output_string)
-            except Exception as e:
-                raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
-
-        elif output_prefix == "boolean:":
-            try:
-                boolean(output_string)
-                return boolean(output_string)
-            except Exception as e:
-                raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code = "8003")
-
-        elif output_prefix == "int:":
-            try:
-                int_value = int(output_string)
-                float_value = float(output_string)
-                if int_value != float_value:
-                    raise E.ConversionOutputError(
-                        f"Cannot convert non-integer value '{output_string}' to exact integer.",
-                        code="8005"
-                    )
-                else:
-                    return int(output_string)
-            except Exception as e:
-                raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
-
-        elif output_prefix == "float:":
-            try:
-                float(output_string)
-                return float(output_string)
-            except Exception as e:
-                raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
-
-        else:
-            raise E.SyntaxError("Unknown Error", code = "9999")
+            return result
 
 
     # Known numeric overflow
