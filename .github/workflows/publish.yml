@@ -61,8 +61,6 @@ jobs:
       env:
         TWINE_USERNAME: ${{ github.actor }}
         TWINE_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        # Dies ist die spezielle URL für GitHub Packages für Python-Pakete.
-        # ${{ github.repository }} wird automatisch zu "BENUTZER/REPOSITORY" aufgelöst.
+      run:
         TWINE_REPOSITORY_URL="https://python.pkg.github.com/${{ github.repository }}"
         twine upload --repository-url $TWINE_REPOSITORY_URL dist/*
