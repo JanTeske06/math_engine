@@ -1,11 +1,9 @@
-# .github/workflows/publish.yml
 name: Publish Package to PyPI and GHCR
 
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch: 
 
 jobs:
   build:
@@ -22,10 +20,10 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install build twine
-    
+
     - name: Build sdist and wheel
       run: python -m build
-      
+
     - name: Store distribution files
       uses: actions/upload-artifact@v4
       with:
@@ -38,31 +36,29 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read     
-      packages: write    
-      id-token: write    
+      contents: read
+      packages: write
+      id-token: write
 
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Download distribution files
       uses: actions/download-artifact@v4
       with:
         name: python-package-dist
         path: dist/
-        
-    - name: Install Twine
+
+    - name: Install Twine (for GHCR upload)
       run: pip install twine
 
     - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        password: ${{ secrets.PYPI_API_TOKEN }} 
 
     - name: Publish to GitHub Packages
       env:
-        TWINE_USERNAME: ${{ github.actor }} 
-        TWINE_PASSWORD: ${{ secrets.GITHUB_TOKEN }} 
-      run: |
+        TWINE_USERNAME: ${{ github.actor }}
+        TWINE_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      run:
         TWINE_REPOSITORY_URL="https://python.pkg.github.com/${{ github.repository }}"
         twine upload --repository-url $TWINE_REPOSITORY_URL dist/*
