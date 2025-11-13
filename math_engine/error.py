@@ -67,7 +67,7 @@ Error_Dictionary = {
     "1": "Missing Files",
     "2": "Scientific Calculation Error",
     "3": "Calculator Error",
-    "4": "UI Error",
+    "4": "Memory Error",
     "5": "Configuration Error",
     "6": "Communication Error",
     "7": "Runtime Error",
@@ -127,11 +127,7 @@ ERROR_MESSAGES = {
     "3030": "Augmented assignment not allowed with variables.",
     "3031": "Boolean in equation",
 
-    # 4xxx — UI/settings/runtime integration
-    "4700": "Process already running",
-    "4501": "Not all Settings could be saved: ", # + failing setting
-    "4002": "Calculation already Running!",
-    "4003": "No Value in ANS",
+    "4000" : "Couldnt find memory entry.",
 
     "5000" : "Missmatch of values.", # +Error
     "5001" : "File not Found.",

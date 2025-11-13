@@ -6,5 +6,5 @@
     "allow_non_decimal": true,
     "debug": false,
     "correct_output_format": true,
-    "default_output_format": "decimal"
+    "default_output_format": "decimal:"
 }
