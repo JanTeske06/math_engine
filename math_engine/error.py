@@ -53,6 +53,9 @@ class ConversionError(MathError):
 class ConversionOutputError(MathError):
     pass
 
+class ConfigError(MathError):
+    pass
+
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +133,9 @@ ERROR_MESSAGES = {
     "4002": "Calculation already Running!",
     "4003": "No Value in ANS",
 
+    "5000" : "Missmatch of values.", # +Error
+    "5001" : "File not Found.",
+    
     "8000": "Error converting int to hex.",
     "8001": "Error converting hex to int.",
     "8002": "Received wrong type: ", # + type

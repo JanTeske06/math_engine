@@ -23,7 +23,6 @@ def load_one_setting(setting):
     settings = config_manager.load_setting_value(setting)
     return settings
 
-from typing import Any, Mapping
 
 def evaluate(expr: str,
              variables: Optional[Mapping[str, Any]] = None,
@@ -49,6 +48,7 @@ def main():
 
 
 if __name__ == "__main__":
-    result = evaluate("h:2+2=4")
+    print(change_setting("decimal_places", 3))
+    result = evaluate("i:0x2222")
     print(result)
     print(type(result))

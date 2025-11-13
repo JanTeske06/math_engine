@@ -1,10 +1,10 @@
 {
-    "decimal_places": 2,
+    "decimal_places": 3,
     "use_degrees": false,
     "allow_augmented_assignment": true,
     "fractions": false,
     "allow_hex": true,
     "all_hex": true,
-    "debug" : false,
+    "debug": false,
     "correct_output_format": true
 }

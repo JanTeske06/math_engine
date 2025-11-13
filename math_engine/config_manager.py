@@ -19,6 +19,7 @@ import sys
 import configparser
 from pathlib import Path
 import json
+from . import error as E
 
 # Absolute paths to configuration files (relative to repository root)
 config_json = Path(__file__).resolve().parent / "config.json"
@@ -115,15 +116,13 @@ def save_setting(key_value, new_value):
             elif expected_type == bool and isinstance(new_value, int):
                 # We only permit 0 or 1, which are the numeric equivalents of bool
                 if new_value != 0 and new_value != 1:
-                    print(
-                        f"ERROR: Type mismatch for '{key_value}'. Expected {expected_type.__name__}, got {type(new_value).__name__} ({new_value}). Only 0 or 1 allowed for boolean type.")
-                    return -1
+                    raise E.ConfigError(f"Type mismatch for '{key_value}'. Expected {expected_type.__name__}, got {type(new_value).__name__} ({new_value}). Only 0 or 1 allowed for boolean type.", code = "5000")
+
 
             # GENERAL TYPE MISMATCH
             else:
-                print(
-                    f"ERROR: Type mismatch for '{key_value}'. Expected {expected_type.__name__}, got {type(new_value).__name__}.")
-                return -1
+                raise E.ConfigError(f"Type mismatch for '{key_value}'. Expected {expected_type.__name__}, got {type(new_value).__name__}.", code = "5000")
+
 
     else:
         # If the key doesn't exist, we save the new value without type checking
@@ -138,8 +137,7 @@ def save_setting(key_value, new_value):
             json.dump(settings, f, indent=4)
             return 1  # Success
     except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"ERROR: Could not save configuration file: {e}")
-        return -1
+        raise E.ConfigError(f"Could not save configuration file: {e}")
 
 
 if __name__ == "__main__":
