@@ -6,9 +6,7 @@ from . import error as E
 from typing import Union
 
 def change_setting(setting: str, new_value: Union[int, bool]):
-    settings = config_manager.load_setting_value("all")
-    settings[setting] = new_value
-    saved_settings = config_manager.save_setting(settings)
+    saved_settings = config_manager.save_setting(setting, new_value)
 
     if saved_settings != -1:
         return 1
@@ -33,3 +31,11 @@ def evaluate(problem: str,  custom_variables: Union[dict, None] = None):
         additional_info = f"Details: {error_obj.message}\nEquation: {error_obj.equation}"
         return E.MathError
     return result
+
+def main():
+    print(evaluate("2+2"))
+
+
+if __name__ == "__main__":
+    print(change_setting("decimal_places", "a"))
+

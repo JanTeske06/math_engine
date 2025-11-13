@@ -75,27 +75,71 @@ def load_setting_description(key_value):
         return settings_dict.get(key_value, 0)
 
 
-def save_setting(settings_dict):
-    """Persist the given settings dictionary back to config.json.
+def save_setting(key_value, new_value):
+    """Persist the given settings back to config.json, with type validation.
 
     Overwrites the existing file with pretty-printed JSON (indent=4).
+    Checks if new_value matches the type of the old value.
 
     Parameters
     ----------
-    settings_dict : dict
-        Dictionary of settings to write.
+    key_value : str
+        The key (setting name) to update.
+    new_value : any
+        The new value to assign.
 
     Returns
     -------
-    dict
-        The same dictionary if successful, or {} on error.
+    int
+        1 on success, -1 on errpr
     """
+
+    settings = load_setting_value("all")
+
+    # 1. VALIDATE AGAINST THE TYPE OF THE OLD VALUE
+    if key_value in settings:
+        old_value = settings[key_value]
+
+        # Get the type of the old value
+        expected_type = type(old_value)
+
+        # 2. CHECK NEW VALUE TYPE AGAINST EXPECTED TYPE
+        if not isinstance(new_value, expected_type):
+
+            # SPECIAL CASE 1: Allowing bool where int is expected (e.g., 0/1 for False/True)
+            if expected_type == int and isinstance(new_value, bool):
+                # Allowed, as bool is a subclass of int in Python
+                pass
+
+                # SPECIAL CASE 2: Allowing int 0/1 where bool is expected
+            elif expected_type == bool and isinstance(new_value, int):
+                # We only permit 0 or 1, which are the numeric equivalents of bool
+                if new_value != 0 and new_value != 1:
+                    print(
+                        f"ERROR: Type mismatch for '{key_value}'. Expected {expected_type.__name__}, got {type(new_value).__name__} ({new_value}). Only 0 or 1 allowed for boolean type.")
+                    return -1
+
+            # GENERAL TYPE MISMATCH
+            else:
+                print(
+                    f"ERROR: Type mismatch for '{key_value}'. Expected {expected_type.__name__}, got {type(new_value).__name__}.")
+                return -1
+
+    else:
+        # If the key doesn't exist, we save the new value without type checking
+        # (This allows users to add new settings if desired)
+        pass
+
+        # 3. SAVE if type check is successful
+    settings[key_value] = new_value
     try:
+        # Use the correct file path (config_json) and dictionary (settings)
         with open(config_json, 'w', encoding='utf-8') as f:
-            json.dump(settings_dict, f, indent=4)
-            return settings_dict
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
+            json.dump(settings, f, indent=4)
+            return 1  # Success
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"ERROR: Could not save configuration file: {e}")
+        return -1
 
 
 if __name__ == "__main__":
