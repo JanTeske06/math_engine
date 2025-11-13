@@ -36,6 +36,18 @@ getcontext().prec = 10000
 # Utilities / small helpers
 # -----------------------------
 
+def boolean(value):
+    try:
+        if isinstance(value, str, bool):
+            if value == "True" or value == True:
+                return True
+            elif value == "False" or value == False:
+                return False
+            else:
+                return -1
+    except Exception as e:
+        raise E.ConversionError("Couldnt convert type to bool", code = "8003")
+
 def get_line_number():
     """Return the caller line number (small debug helper)."""
     return inspect.currentframe().f_back.f_lineno
@@ -275,7 +287,7 @@ FUNCTION_STARTS_OPTIMIZED = {
 }
 
 
-def translator(problem, custom_variables):
+def translator(problem, custom_variables, settings):
     """Convert raw input string into a token list (numbers, ops, parens, variables, functions).
 
     Notes:
@@ -286,6 +298,8 @@ def translator(problem, custom_variables):
     var_list = [None] * len(problem)  # Track seen variable symbols → var0, var1, ...
     full_problem = []
     b = 0
+
+
 
     CONTEXT_VARS = {}
     for var_name, value in custom_variables.items():
@@ -322,44 +336,70 @@ def translator(problem, custom_variables):
                 break
         if found_function:
             continue
+
+
         # --- Numbers: digits and decimal separator (EXPONENTIAL NOTATION SUPPORT ADDED) ---
         if isInt(current_char) or (b >= 0 and current_char == "."):
             str_number = current_char
             has_decimal_point = False  # Only one dot allowed in a numeric literal
             has_exponent_e = False  # Only one 'e' or 'E' allowed
+            if b <= len(problem)+1:
+                allowed_char = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "a", "b", "c", "d","e", "f"}
+                forbidden_char = {".", ","}
+                hex_number = "0x"
+                if int(current_char) == 0 and problem[b+1] == "x" and settings["allow_hex"] == True:
+                    a =b+2
+                    while (a < len(problem)):
+                        if problem[a] in forbidden_char:
+                            raise E.ConversionError("Unexpected token in hex:" + str(problem[a]), code="8004")
+                        elif problem[a] in allowed_char:
+                            hex_number += problem[a]
+                        else:
+                            break
+                        a += 1
 
-            # Continue reading the number part
-            while (b + 1 < len(problem)):
-                next_char = problem[b + 1]
+                    str_number = hex_to_int(str(hex_number))
+                    current_char = str_number
+                    b=a-1
+                    #full_problem.append(Decimal(str_number))
 
-                # 1. Handle decimal points
-                if next_char == ".":
-                    if has_decimal_point:
-                        raise E.SyntaxError("Double decimal point.", code="3008")
-                    has_decimal_point = True
 
-                # 2. Handle the 'E' or 'e' for exponent
-                elif next_char in ('e', 'E'):
-                    if has_exponent_e:
-                        # Cannot have two 'e's in a single number
-                        raise E.SyntaxError("Double exponent sign 'E'/'e'.", code="3031")
-                    has_exponent_e = True
 
-                # 3. Handle the sign (+ or -) immediately following 'E'/'e'
-                elif next_char in ('+', '-'):
-                    # The sign is only valid if it immediately follows 'e' or 'E'
-                    if not (problem[b] in ('e', 'E') and has_exponent_e):
-                        # If it's not following 'e'/'E', it's a separate unary operator.
-                        # Break the loop to treat it as an operator in the next iteration.
-                        break
 
-                # 4. End the loop if the next character is not a number component
-                elif not isInt(next_char):
-                    break
+                else:
+                # Continue reading the number part
+                    while (b + 1 < len(problem)):
+                        next_char = problem[b + 1]
 
-                # If we made it here, the character is a valid part of the number (digit, dot, E/e, or sign after E/e)
-                b += 1
-                str_number += problem[b]
+
+                        # 1. Handle decimal points
+                        if next_char == ".":
+                            if has_decimal_point:
+                                raise E.SyntaxError("Double decimal point.", code="3008")
+                            has_decimal_point = True
+
+                        # 2. Handle the 'E' or 'e' for exponent
+                        elif next_char in ('e', 'E'):
+                            if has_exponent_e:
+                                # Cannot have two 'e's in a single number
+                                raise E.SyntaxError("Double exponent sign 'E'/'e'.", code="3031")
+                            has_exponent_e = True
+
+                        # 3. Handle the sign (+ or -) immediately following 'E'/'e'
+                        elif next_char in ('+', '-'):
+                            # The sign is only valid if it immediately follows 'e' or 'E'
+                            if not (problem[b] in ('e', 'E') and has_exponent_e):
+                                # If it's not following 'e'/'E', it's a separate unary operator.
+                                # Break the loop to treat it as an operator in the next iteration.
+                                break
+
+                        # 4. End the loop if the next character is not a number component
+                        elif not isInt(next_char):
+                            break
+
+                        # If we made it here, the character is a valid part of the number (digit, dot, E/e, or sign after E/e)
+                        b += 1
+                        str_number += problem[b]
 
             # Validate the final collected string
             if isfloat(str_number) or isInt(str_number):
@@ -469,7 +509,7 @@ def ast(received_string, settings, custom_variables):
     augmented assignment patterns like `12+=6`):
       - settings["allow_augmented_assignment"] → influences pre-parse validation/rewrites.
     """
-    analysed, var_counter = translator(received_string, custom_variables)
+    analysed, var_counter = translator(received_string, custom_variables, settings)
 
     # Normalize spurious leading/trailing '=' if there's no variable; keep equations intact
     if analysed and analysed[0] == "=" and not "var0" in analysed:
@@ -803,6 +843,44 @@ def cleanup(result):
     # Fallback: unknown type, return as-is
     return result, rounding
 
+def hex_to_int(hex):
+    if not isinstance(hex, str):
+        raise E.ConversionError("Converter didnt receive string: " + str(type(hex)), code="8002")
+    else:
+        try:
+            hex = int(hex, 0)
+            return hex
+
+        except ValueError as e:
+            raise E.ConversionError(f"Couldnt convert hex to int: {e}", code="8000")
+
+        except Exception as e:
+            raise E.ConversionError(f"Unexpected conversion error: {e}", code="8001")
+
+
+
+def int_to_hex(number):
+    if isinstance(number, (Decimal, float)) and number % 1 != 0:
+        raise E.ConversionError("Cannot convert non-integer value to hex.", code="8003")
+    try:
+        if isinstance(number, Decimal):
+            number = int(number.to_integral_value())
+        else:
+            number = int(number)
+    except Exception:
+        raise E.ConversionError("Input could not be converted to a Python integer.", code="8004")
+
+    if not isinstance(number, int):
+        raise E.ConversionError("Converter didnt receive int: " + str(type(number)), code="8002")
+
+    try:
+        hex_string = hex(number)
+        return hex_string
+
+    except Exception as e:
+        # Spezifische Fehler (z.B. bei extrem großen Zahlen)
+        raise E.ConversionError(f"Couldnt convert int to hex: {e}", code="8001")
+
 
 # -----------------------------
 # Public entry point
@@ -811,14 +889,48 @@ def cleanup(result):
 def calculate(problem: str, custom_variables: Union[dict, None] = None):
     if custom_variables is None:
         custom_variables = {}
+
     """Main API: parse → (evaluate | solve | equality-check) → format → render string."""
     # Guard precision locally before each calculation (UI may adjust as well)
     getcontext().prec = 10000
-    settings = config_manager.load_setting_value("all")  # NEW: pass UI settings down to parser
+    settings = config_manager.load_setting_value("all")  # pass UI settings down to parser
+    global debug
+    debug = settings.get("debug", False)
     var_list = []
-    try:
-        final_tree, cas, var_counter = ast(problem, settings, custom_variables)  # NEW: settings param enables AA handling
+    allowed_prefix = (
+        "decimal:", "DECIMAL:", "Decimal:", "decimal", "DECIMAL", "Decimal",
 
+        "string:", "STRING:", "String:", "string:", "STRING:", "String:",
+
+        "bool:", "BOOL:", "Bool:", "bool:", "BOOL:", "Bool:",
+
+        "float:", "FLOAT:", "Float:", "float:", "FLOAT:", "Float:",
+
+        "int:", "INT:", "Int:", "int:", "INT:", "Int:",
+
+        "strin:", "STRIN:", "Strin:", "strin:", "STRIN:", "Strin:","str:", "STR:", "Str:", "str:", "STR:", "Str:",
+    )
+    output_prefix = ""
+    try:
+        for prefix in allowed_prefix:
+            if problem.startswith(prefix):
+                if prefix.startswith("s")or prefix.startswith("S"):
+                    output_prefix = "string:"
+                elif prefix.startswith("b")or prefix.startswith("B"):
+                    output_prefix = "boolean:"
+                elif prefix.startswith("d") or prefix.startswith("D"):
+                    output_prefix = "decimal:"
+                elif prefix.startswith("f") or prefix.startswith("F"):
+                    output_prefix = "float:"
+                elif prefix.startswith("i") or prefix.startswith("I"):
+                    output_prefix = "int:"
+                problem = problem[len(prefix):]
+                break
+
+
+        final_tree, cas, var_counter = ast(problem, settings, custom_variables)  # NEW: settings param enables AA handling
+        if debug == True:
+            print(final_tree)
         # Decide evaluation mode
         if cas and var_counter > 0:
             # Solve linear equation for first variable symbol in the token stream
@@ -834,7 +946,10 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
             left_val = final_tree.left.evaluate()
             right_val = final_tree.right.evaluate()
             output_string = "True" if left_val == right_val else "False"
-            return output_string
+            if output_prefix != "boolean:" and output_prefix != "string:" and output_prefix != "":
+                raise E.ConversionError("Couldnt convert result into the given prefix", code = "8006")
+            output_prefix = boolean(output_string)
+            #return output_string
 
         else:
             # Mixed/invalid states with or without '=' and variables
@@ -867,21 +982,44 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
         else:
             output_string = result
 
-        # --- END OF MODIFIED BLOCK ---
+        if output_prefix == "" or output_prefix == "decimal:":
+            try:
+                Decimal(output_string)
+                return Decimal(output_string)
+            except Exception as e:
+                raise E.ConversionError("Couldnt convert type to" + str(output_prefix), code="8003")
 
-        # Final display formatting
-        # 1. Variable and Rounding
-        # 2. Varbiable and no Rounding
-        # 3. No Variable but rounding
-        # 4. No Variable, No rounding
-        if cas == True and rounding == True:
-            return ((output_string))
-        elif cas == True and rounding == False:
-            return ((output_string))
-        elif rounding == True and not cas:
-            return ((output_string))
+        elif output_prefix == "string:":
+            try:
+                str(output_string)
+                return str(output_string)
+            except Exception as e:
+                raise E.ConversionError("Couldnt convert type to" + str(output_prefix), code="8003")
+
+        elif output_prefix == "boolean:":
+            try:
+                boolean(output_string)
+                return boolean(output_string)
+            except Exception as e:
+                raise E.ConversionError("Couldnt convert type to" + str(output_prefix), code = "8003")
+
+        elif output_prefix == "int:":
+            try:
+                int(output_string)
+                return int(output_string)
+            except Exception as e:
+                raise E.ConversionError("Couldnt convert type to" + str(output_prefix), code="8003")
+
+        elif output_prefix == "float:":
+            try:
+                float(output_string)
+                return float(output_string)
+            except Exception as e:
+                raise E.ConversionError("Couldnt convert type to" + str(output_prefix), code="8003")
+
         else:
-            return ((output_string))
+            raise E.SyntaxError("Unknown Error", code = "9999")
+
 
     # Known numeric overflow
     except Overflow as e:

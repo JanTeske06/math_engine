@@ -2,5 +2,8 @@
     "decimal_places": 2,
     "use_degrees": false,
     "allow_augmented_assignment": true,
-    "fractions": false
+    "fractions": false,
+    "allow_hex": true,
+    "all_hex": true,
+    "debug" : false
 }

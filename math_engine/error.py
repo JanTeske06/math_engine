@@ -47,6 +47,9 @@ class SolverError(MathError):
     """Algebraic solver issues (g., non-linear, multiple variables)."""
     pass
 
+class ConversionError(MathError):
+    pass
+
 
 # ---------------------------------------------------------------------------
 # Error families (first digit) for quick categorization in logs/telemetry.
@@ -61,6 +64,7 @@ Error_Dictionary = {
     "5": "Configuration Error",
     "6": "Communication Error",
     "7": "Runtime Error",
+    "8" : "Conversion Error"
 }
 
 # Error code structure:
@@ -121,6 +125,14 @@ ERROR_MESSAGES = {
     "4501": "Not all Settings could be saved: ", # + failing setting
     "4002": "Calculation already Running!",
     "4003": "No Value in ANS",
+
+    "8000": "Error converting int to hex.",
+    "8001": "Error converting hex to int.",
+    "8002": "Received wrong type: ", # + type
+    "8003" : "Error Converting.",
+    "8004" : "Input could not be converted to a Python integer.",
+    "8005" : "Forbidden value in Hex", # + value
+    "8006" : "Result value not compatible with output prefix",
 
     # 9xxx — catch-all
     "9999": "Unexpected Error: ",                # + error

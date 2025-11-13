@@ -1,3 +1,4 @@
+import math_engine.calculator
 from . import calculator
 from . import config_manager as config_manager
 from . import error as E
@@ -26,8 +27,8 @@ from typing import Any, Mapping
 
 def evaluate(expr: str,
              variables: Optional[Mapping[str, Any]] = None,
-             /,
              **kwvars: Any) -> Any:
+    explanation = False
     if variables is None:
         merged = dict(kwvars)
     else:
@@ -42,10 +43,18 @@ def evaluate(expr: str,
     return result
 
 
+
 def main():
     print(evaluate("2+2"))
 
 
 if __name__ == "__main__":
-    print(evaluate("2+2-level+pi", {"level": 1}))
-    print(evaluate("2+2-level+pi", level = 1))
+
+    print(evaluate("bool:2+2"))
+
+    #print(evaluate("int:(0xFF)"))
+    #print(evaluate("int:sin(0xFF)"))
+    #print(type(evaluate("int:(0xFF)")))
+    #print(evaluate("sin(0xFF)"))
+    #print(evaluate("2+2-level+pi", level = 1))
+    #print(math_engine.calculator.int_to_hex("255"))
