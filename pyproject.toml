@@ -4,8 +4,8 @@ requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "math-engine-chaos"  # WICHTIG: Muss eindeutig auf PyPI sein
-version = "0.1.0"
+name = "math-engine"
+version = "0.1.2"
 authors = [
   { name="Jan Teske", email="jan.teske.06@gmail.com" },
 ]
@@ -20,3 +20,7 @@ classifiers = [
 
 dependencies = [
 ]
+
+[project.urls]
+Homepage = "https://github.com/JanTeske06/math_engine"
+Source = "https://github.com/JanTeske06/math_engine"

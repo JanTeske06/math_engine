@@ -21,11 +21,6 @@ from . import config_manager as config_manager
 from . import ScientificEngine
 from . import error as E
 
-#import calculator
-# import config_manager as config_manager
-# import error as E
-# import ScientificEngine
-
 # Debug toggle for optional prints in this module
 debug = False
 
@@ -839,7 +834,7 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None):
             left_val = final_tree.left.evaluate()
             right_val = final_tree.right.evaluate()
             output_string = "True" if left_val == right_val else "False"
-            return output_string, 4
+            return output_string
 
         else:
             # Mixed/invalid states with or without '=' and variables
