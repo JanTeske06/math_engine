@@ -126,6 +126,7 @@ ERROR_MESSAGES = {
     "3030": "Augmented assignment not allowed with variables.",
     "3031": "Boolean in equation",
     "3032": "Multiple digit variables not supported.",
+    "3033": "Function not support with only not decimals.",
 
     "4000" : "Couldnt find memory entry.",
 

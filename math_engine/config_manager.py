@@ -142,54 +142,66 @@ def save_setting(key_value, new_value):
 
     prefix_found = False
 
-    try:
-        for prefix in allowed_prefix:
-            if new_value_str_lower.startswith(prefix):
+    if key_value == "default_output_format":
 
-                prefix_found = True
+        try:
+            for prefix in allowed_prefix:
+                if new_value_str_lower.startswith(prefix):
 
-                if prefix.startswith("s"):
-                    final_prefix = "string:"
-                elif prefix.startswith("bo"):
-                    final_prefix = "boolean:"
-                elif prefix.startswith("d"):
-                    final_prefix = "decimal:"
-                elif prefix.startswith("f"):
-                    final_prefix = "float:"
-                elif prefix.startswith("i"):
-                    final_prefix = "int:"
-                elif prefix.startswith("h"):
-                    final_prefix = "hexadecimal:"
-                elif prefix.startswith("bi"):
-                    final_prefix = "binary:"
-                elif prefix.startswith("o"):
-                    final_prefix = "octal:"
-                break
-
-
-        if not prefix_found:
-            if ":" not in new_value_str_lower:
-                allowed_pure_names = {p.strip(":") for p in allowed_prefix}
-
-                if new_value_str_lower in allowed_pure_names:
-                    final_prefix = new_value_str_lower + ":"
                     prefix_found = True
 
-        if not prefix_found:
-            allowed_prefix_str = ', '.join(sorted(allowed_pure_names))  # Sortiere für Lesbarkeit
-            raise E.ConfigError(f"'{new_value}' is not a recognized output format. Allowed formats: \n"
-                                f"{allowed_prefix_str}", code="5002")
+                    if prefix.startswith("s"):
+                        final_prefix = "string:"
+                    elif prefix.startswith("bo"):
+                        final_prefix = "boolean:"
+                    elif prefix.startswith("d"):
+                        final_prefix = "decimal:"
+                    elif prefix.startswith("f"):
+                        final_prefix = "float:"
+                    elif prefix.startswith("i"):
+                        final_prefix = "int:"
+                    elif prefix.startswith("h"):
+                        final_prefix = "hexadecimal:"
+                    elif prefix.startswith("bi"):
+                        final_prefix = "binary:"
+                    elif prefix.startswith("o"):
+                        final_prefix = "octal:"
+                    break
 
-        settings[key_value] = final_prefix
 
-        with open(config_json, 'w', encoding='utf-8') as f:
-            json.dump(settings, f, indent=4)
-            return 1  # Success
+            if not prefix_found:
+                if ":" not in new_value_str_lower:
+                    allowed_pure_names = {p.strip(":") for p in allowed_prefix}
 
-    except Exception as e:
-        raise E.ConfigError(f"Configuration saving failed: {e}", code="5002")
+                    if new_value_str_lower in allowed_pure_names:
+                        final_prefix = new_value_str_lower + ":"
+                        prefix_found = True
+
+            if not prefix_found:
+                allowed_prefix_str = ', '.join(sorted(allowed_pure_names))  # Sortiere für Lesbarkeit
+                raise E.ConfigError(f"'{new_value}' is not a recognized output format. Allowed formats: \n"
+                                    f"{allowed_prefix_str}", code="5002")
+
+            settings[key_value] = final_prefix
+
+            with open(config_json, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=4)
+                return 1  # Success
+
+        except Exception as e:
+            raise E.ConfigError(f"Configuration saving failed: {e}", code="5002")
 
     settings[key_value] = final_prefix
+
+    if key_value == "only_hex":
+        settings["only_binary"] = False
+        settings["only_octal"] = False
+    elif key_value == "only_binary":
+        settings["only_hex"] = False
+        settings["only_octal"] = False
+    elif key_value == "only_octal":
+        settings["only_binary"] = False
+        settings["only_hex"] = False
     try:
         # Use the correct file path (config_json) and dictionary (settings)
         with open(config_json, 'w', encoding='utf-8') as f:

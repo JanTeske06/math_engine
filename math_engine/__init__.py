@@ -101,5 +101,4 @@ def validate(expr: str,
 
 
 if __name__ == '__main__':
-    print(validate("int:Level+3", Level = "1"))
-    #print(evaluate(("2+2+sin(8)")))
+    print(evaluate("o: sin(0b11)"))

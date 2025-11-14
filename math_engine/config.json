@@ -1,10 +1,13 @@
 {
-    "decimal_places": 3,
+    "decimal_places": 2,
     "use_degrees": false,
     "allow_augmented_assignment": true,
     "fractions": false,
     "allow_non_decimal": true,
     "debug": false,
     "correct_output_format": true,
-    "default_output_format": "decimal:"
+    "default_output_format": "decimal:",
+    "only_hex": false,
+    "only_binary": true,
+    "only_octal": false
 }

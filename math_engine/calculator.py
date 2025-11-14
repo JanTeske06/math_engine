@@ -297,6 +297,9 @@ FUNCTION_STARTS_OPTIMIZED = {
 }
 
 
+
+
+
 def translator(problem, custom_variables, settings):
     """Convert raw input string into a token list (numbers, ops, parens, variables, functions).
 
@@ -345,6 +348,8 @@ def translator(problem, custom_variables, settings):
                 found_function = True
                 break
         if found_function:
+            if settings["only_hex"] == True or settings["only_binary"] == True or settings["only_octal"]== True:
+                raise E.SyntaxError(f"Function not support with only not decimals.", code="3033")
             continue
 
         # --- Numbers: digits and decimal separator (EXPONENTIAL NOTATION SUPPORT ADDED) ---
@@ -472,6 +477,8 @@ def translator(problem, custom_variables, settings):
 
         # --- Constant π ---
         elif current_char == 'π':
+            if settings["only_hex"] == True or settings["only_binary"] == True or settings["only_octal"]== True:
+                raise E.SyntaxError(f"Error with constant π:{result_string}", code="3033", position=b)
             result_string = ScientificEngine.isPi(str(current_char))
             try:
                 calculated_value = Decimal(result_string)
@@ -481,7 +488,6 @@ def translator(problem, custom_variables, settings):
 
         # --- Variables (fallback) ---
         else:
-            print(full_problem)
 
             if temp_var == b-1 and b > 0 and temp_var != -1:
                 raise E.SyntaxError(f"Multiple digit variables not supported.", code ="3032", position=b)
@@ -501,7 +507,6 @@ def translator(problem, custom_variables, settings):
     # Insert '*' between adjacent tokens that imply multiplication:
     # number/variable/')' followed by '(' / number / variable / function name
     b = 0
-    print(full_problem)
     while b < len(full_problem):
 
         if b + 1 < len(full_problem):
@@ -534,7 +539,6 @@ def translator(problem, custom_variables, settings):
                 full_problem.insert(b + 1, '*')
 
         b += 1
-    print(full_problem)
     return full_problem, var_counter
 
 
@@ -885,7 +889,7 @@ def cleanup(result):
 
 def value_to_int(value):
     if not isinstance(value, str):
-        raise E.ConversionError("Converter didnt receive string: " + str(type(hex)), code="8002")
+        raise E.ConversionError("Converter didnt receive string: " + str(type(value)), code="8002")
     else:
         try:
             value = int(value, 0)
@@ -899,9 +903,9 @@ def value_to_int(value):
 
 
 
-def convert_to_hex(number):
+def int_to_value(number, output_prefix):
     if isinstance(number, (Decimal, float, int)) and number % 1 != 0:
-        raise E.ConversionError("Cannot convert non-integer value to hex.", code="8003")
+        raise E.ConversionError("Cannot convert non-integer value to non decimal.", code="8003")
     try:
         if isinstance(number, Decimal):
             number = int(number.to_integral_value())
@@ -914,12 +918,15 @@ def convert_to_hex(number):
         raise E.ConversionError("Converter didnt receive int: " + str(type(number)), code="8002")
 
     try:
-        hex_string = hex(number)
-        return hex_string
-
+        if output_prefix == "hexadecimal:":
+            converted_value = hex(number)
+        elif output_prefix == "binary:":
+            converted_value = bin(number)
+        elif output_prefix == "octal:":
+            converted_value = oct(number)
+        return converted_value
     except Exception as e:
-        # Spezifische Fehler (z.B. bei extrem großen Zahlen)
-        raise E.ConversionError(f"Couldnt convert int to hex: {e}", code="8001")
+        raise E.ConversionError(f"Couldnt convert int to non decimal: {e}", code="8001")
 
 
 # -----------------------------
@@ -943,10 +950,9 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
         "float:", "f:",
         "bool:", "bo", "boolean:",
         "hex:", "h:", "hexadecimal:",
-        "str:", "s:", "string:"
-        "bin", "bi", "binary",
-        "oc", "o", "octal"
-
+        "str:", "s:", "string:",
+        "bin:", "bi:", "binary:",
+        "oc:", "o:", "octal:"
     )
     output_prefix = ""
     problem_lower = problem.lower()
@@ -1059,8 +1065,21 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
 
             elif output_prefix == "hexadecimal:":
                 try:
-                    convert_to_hex(output_string)
-                    return convert_to_hex(output_string)
+                    int_to_value(output_string, output_prefix)
+                    return int_to_value(output_string, output_prefix)
+                except Exception as e:
+                    raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
+
+            elif output_prefix == "binary:":
+                try:
+                    int_to_value(output_string, output_prefix)
+                    return int_to_value(output_string, output_prefix)
+                except Exception as e:
+                    raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
+            elif output_prefix == "octal:":
+                try:
+                    int_to_value(output_string, output_prefix)
+                    return int_to_value(output_string, output_prefix)
                 except Exception as e:
                     raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
 
@@ -1070,6 +1089,7 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
                     return boolean(output_string)
                 except Exception as e:
                     raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code = "8003")
+
 
             elif output_prefix == "int:":
                 try:
