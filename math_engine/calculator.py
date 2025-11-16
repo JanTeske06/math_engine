@@ -368,7 +368,7 @@ def translator(problem, custom_variables, settings):
             value_prefix = ""
 
 
-            if b <= len(problem)+1:
+            if b <= len(problem)+1 and len(problem) > 1:
                 if int(current_char) == 0 and problem[b+1] in non_decimal_flags and settings["allow_non_decimal"] == True:
                     if problem[b+1] == "b" or problem[b+1] == "B":
                         value_prefix = "0b"
@@ -387,7 +387,9 @@ def translator(problem, custom_variables, settings):
 
                     a =b+2
                     while (a < len(problem)):
-                        if problem[a] in forbidden_char:
+                        if problem[a] not in allowed_char and problem[a] not in Operations and problem[a] != " ":
+                            raise E.ConversionError(f"Unexpected token in {prefix_name}:" + str(problem[a]), code="8004", position=b+1)
+                        elif problem[a] in forbidden_char:
                             raise E.ConversionError(f"Unexpected token in {prefix_name}:" + str(problem[a]), code="8004", position=b+1)
                         elif problem[a] in allowed_char:
                             value_prefix += problem[a]
@@ -555,7 +557,22 @@ def ast(received_string, settings, custom_variables):
       - settings["allow_augmented_assignment"] → influences pre-parse validation/rewrites.
     """
     analysed, var_counter = translator(received_string, custom_variables, settings)
+    d = 0
+    mutliple_equalsign = False
+    temp_position = -2
+    while d < len(analysed):
+        "3==3"
+        if analysed[d] == "=":
+            if temp_position != -2 and temp_position != d-1:
+                raise E.CalculationError("Multiple Equal signs in one Problem.", code = "3036")
+            elif temp_position == -2 and temp_position != d-1:
+                temp_position = d
+            elif temp_position != -2 and temp_position == d-1:
+                temp_position = d
 
+        d+=1
+    if analysed == []:
+        raise E.SyntaxError("Empty String", code = "3034")
     # Normalize spurious leading/trailing '=' if there's no variable; keep equations intact
     if analysed and analysed[0] == "=" and not "var0" in analysed:
         analysed.pop(0)
@@ -617,7 +634,6 @@ def ast(received_string, settings, custom_variables):
 
     if debug == True:
         print(analysed)
-
     # ---- Parsing functions in precedence order ----
 
     def parse_factor(tokens):
@@ -754,7 +770,6 @@ def ast(received_string, settings, custom_variables):
 
     # Build the final AST
     final_tree = parse_gleichung(analysed)
-
     # Decide if this is a CAS-style equation with <= 1 variable
     if isinstance(final_tree, BinOp) and final_tree.operator == '=' and var_counter <= 1:
         cas = True
@@ -765,7 +780,6 @@ def ast(received_string, settings, custom_variables):
 
     # `cas` may or may not be set above; default to False
     cas = locals().get('cas', False)
-
     return final_tree, cas, var_counter
 
 
@@ -891,6 +905,12 @@ def value_to_int(value):
     if not isinstance(value, str):
         raise E.ConversionError("Converter didnt receive string: " + str(type(value)), code="8002")
     else:
+        if value == "0b":
+            raise E.SyntaxError("Invalid Binary Number", code = "3035")
+        elif  value == "0x":
+            raise E.SyntaxError("Invalid Hex Number", code="3035")
+        elif  value == "0O":
+            raise E.SyntaxError("Invalid Octcal Number", code="3035")
         try:
             value = int(value, 0)
             return value

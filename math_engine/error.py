@@ -127,6 +127,9 @@ ERROR_MESSAGES = {
     "3031": "Boolean in equation",
     "3032": "Multiple digit variables not supported.",
     "3033": "Function not support with only not decimals.",
+    "3034": "Empty string.", # + string
+    "3035": "Incomplete number.",
+    "3036" : "Two or more equal signs.",
 
     "4000" : "Couldnt find memory entry.",
 

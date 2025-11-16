@@ -18,7 +18,10 @@ def set_memory(key_value: str, value:str):
 def delete_memory(key_value: str):
     global memory
     try:
-        memory.pop(key_value)
+        if key_value == "all":
+            memory = {}
+        else:
+            memory.pop(key_value)
     except Exception as e:
         raise E.SyntaxError(f"Entry {key_value} does not exist.", code = "4000")
 
@@ -101,4 +104,7 @@ def validate(expr: str,
 
 
 if __name__ == '__main__':
-    print(evaluate("o: sin(0b11)"))
+    problem = "1=2"
+    set_memory("Level", "a")
+    print(evaluate(problem))
+    print(type(evaluate(problem)))
