@@ -397,7 +397,7 @@ def translator(problem, custom_variables, settings):
             CONTEXT_VARS[var_name] = str(value)
 
     sorted_vars = sorted(CONTEXT_VARS.keys(), key=len, reverse=True)
-
+    HEX_DIGITS = "0123456789ABCDEFabcdef"
     temp_problem = problem
     for var_name in sorted_vars:
         value_str = CONTEXT_VARS[var_name]
@@ -510,9 +510,20 @@ def translator(problem, custom_variables, settings):
 
         # --- Scientific functions and special forms: sin(, cos(, tan(, log(, √(, e^( ---
 
+        elif settings.get("only_hex", False) and current_char in HEX_DIGITS:
+            # Sammle alle aufeinanderfolgenden Hex-Zeichen (z.B. "FF", "1A3")
+            str_number = current_char
+            while b + 1 < len(problem) and problem[b + 1] in HEX_DIGITS:
+                b += 1
+                str_number += problem[b]
 
-
-
+            # Jetzt "0x" davorsetzen und in int -> Decimal umwandeln
+            try:
+                int_value = value_to_int("0x" + str_number)
+                full_problem.append(Decimal(int_value))
+            except E.ConversionError as e:
+                # Wenn du möchtest, hier ein schönerer Fehler
+                raise
 
         # --- Constant π ---
         elif current_char == 'π':
@@ -529,6 +540,7 @@ def translator(problem, custom_variables, settings):
         else:
 
             if temp_var == b-1 and b > 0 and temp_var != -1:
+                print("x")
                 raise E.SyntaxError(f"Multiple digit variables not supported.", code ="3032", position=b)
 
             # Map each new variable symbol to var{n} to keep internal representation uniform
@@ -1065,6 +1077,9 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
         if cas and var_counter > 0:
             # Solve linear equation for first variable symbol in the token stream
             var_name_in_ast = "var0"
+            if settings["only_hex"] == True or settings["only_binary"] == True or settings["only_octal"] == True:
+                raise E.SolverError("Variables not supported with only_hex, only_binary or only_octal mode.",
+                                    code="3038")
             if validate == 1:
                 result = solve(final_tree, var_name_in_ast)
 
@@ -1094,6 +1109,8 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
             if cas:
                 raise E.SolverError("The solver was used on a non-equation", code="3005")
             elif not cas and not "=" in problem:
+                if settings["only_hex"] == True or settings["only_binary"] == True or settings["only_octal"] == True:
+                    raise E.SolverError("Variables not supported with only_hex, only_binary or only_octal mode.", code="3038")
                 raise E.SolverError("No '=' found, although a variable was specified.", code="3012")
             elif cas and "=" in problem and (
                     problem.index("=") == 0 or problem.index("=") == (len(problem) - 1)):
@@ -1201,7 +1218,8 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
 
     except E.ConversionOutputError as e:
         fallback_versuche = [ "decimal:", "boolean:", "string:"]
-        if settings["correct_output_format"] == True:
+
+        if settings["correct_output_format"] == True and settings["only_hex"] == False and settings["only_binary"] == False and settings["only_octal"]== False:
             for versuch in fallback_versuche:
                 try:
                     if versuch == "decimal:":

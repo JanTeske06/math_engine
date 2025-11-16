@@ -104,6 +104,6 @@ def validate(expr: str,
 
 
 if __name__ == '__main__':
-    problem = "3+3"
+    problem = "FF/8"
     print(evaluate(problem) )
     print(type(evaluate(problem)))

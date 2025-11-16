@@ -131,6 +131,7 @@ ERROR_MESSAGES = {
     "3035": "Incomplete number.",
     "3036" : "Two or more equal signs.",
     "3037" : "Two equal signs after another, but another type of output was forced.",
+    "3038" : "Variables not supported with only_hex, only_binary or only_octal mode.",
 
     "4000" : "Couldnt find memory entry.",
 
