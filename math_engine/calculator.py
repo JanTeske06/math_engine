@@ -824,6 +824,8 @@ def ast(received_string, settings, custom_variables):
     # Decide if this is a CAS-style equation with <= 1 variable
     if isinstance(final_tree, BinOp) and final_tree.operator == '=' and var_counter <= 1:
         cas = True
+    if isinstance(final_tree, BinOp) and final_tree.operator == '=' and var_counter > 1:
+        cas = True
 
     if debug == True:
         print("Final AST:")
@@ -1065,7 +1067,7 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
         if output_prefix == "" and settings["only_hex"] == True:
             output_prefix = "hexadecimal:"
         elif output_prefix == "" and settings["only_binary"] == True:
-            output_prefix = "boolean:"
+            output_prefix = "binary:"
         elif output_prefix == "" and settings["only_octal"] == True:
             output_prefix = "octal:"
 
@@ -1089,6 +1091,8 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
                 result = final_tree.evaluate()
 
         elif cas and var_counter == 0:
+            if output_prefix == "":
+                output_prefix = "boolean:"
             # Pure equality check (no variable): returns "= True/False"
             left_val = final_tree.left.evaluate()
             right_val = final_tree.right.evaluate()
@@ -1115,7 +1119,11 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
             elif cas and "=" in problem and (
                     problem.index("=") == 0 or problem.index("=") == (len(problem) - 1)):
                 raise E.SolverError("One of the sides is empty: " + str(problem), code="3022")
+            elif cas and var_counter>1:
+                raise E.SolverError("Multiple Variables found.", error = "")
             else:
+                print(cas)
+                print(var_counter)
                 raise E.CalculationError("The calculator was called on an equation.", code="3015")
 
         # Render result based on settings (fractions/decimals, rounding flag)
@@ -1217,29 +1225,29 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
         )
 
     except E.ConversionOutputError as e:
-        fallback_versuche = [ "decimal:", "boolean:", "string:"]
-
-        if settings["correct_output_format"] == True and settings["only_hex"] == False and settings["only_binary"] == False and settings["only_octal"]== False:
-            for versuch in fallback_versuche:
-                try:
-                    if versuch == "decimal:":
-                        if isDecimal(output_string) != False:
-                            return Decimal(output_string)
-
-                    elif versuch == "boolean:":
-                        bool_result = boolean(output_string)
-                        if bool_result in (True, False):
-                            return bool_result
-
-                    elif versuch == "string:":
-                        return str(output_string)
-
-                except Exception as e:
-                    continue
-        else:
+        # fallback_versuche = [ "decimal:", "boolean:", "string:"]
+        #
+        # if settings["correct_output_format"] == True and settings["only_hex"] == False and settings["only_binary"] == False and settings["only_octal"]== False:
+        #     for versuch in fallback_versuche:
+        #         try:
+        #             if versuch == "decimal:":
+        #                 if isDecimal(output_string) != False:
+        #                     return Decimal(output_string)
+        #
+        #             elif versuch == "boolean:":
+        #                 bool_result = boolean(output_string)
+        #                 if bool_result in (True, False):
+        #                     return bool_result
+        #
+        #             elif versuch == "string:":
+        #                 return str(output_string)
+        #
+        #         except Exception as e:
+        #             continue
+        # else:
             raise E.ConversionError(
                 f"Couldnt convert result '{output_string}' into '{output_prefix}'",
-                code="8007"
+                code="8006"
             )
     # Re-raise our domain errors after attaching the source equation
     except E.MathError as e:

@@ -37,6 +37,20 @@ def change_setting(setting: str, new_value: Union[int, bool]):
     elif saved_settings == -1:
         return -1
 
+def load_preset(settings: dict):
+    current = config_manager.load_setting_value("all")
+    unknown = [k for k in settings.keys() if k not in current]
+    if unknown:
+        raise E.SyntaxError(f"Unknown settings in preset: {unknown}", code="5003")
+    missing = [k for k in current.keys() if k not in settings]
+    if missing:
+        raise E.SyntaxError(f"Missing settings in preset: {missing}", code="5004")
+    current.update(settings)
+    config_manager.load_preset(current)
+    return 1
+
+
+
 def load_all_settings():
     settings = config_manager.load_setting_value("all")
     return settings
@@ -103,7 +117,8 @@ def validate(expr: str,
 
 
 
+#
 if __name__ == '__main__':
-    problem = "FF/8"
-    print(evaluate(problem) )
-    print(type(evaluate(problem)))
+    #problem = ("x+1", x=5)
+
+    print(math_engine.evaluate("hex:5/2"))

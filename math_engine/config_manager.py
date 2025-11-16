@@ -75,6 +75,15 @@ def load_setting_description(key_value):
     else:
         return settings_dict.get(key_value, 0)
 
+def force_overwrite_settings(settings:dict):
+    try:
+            with open(config_json, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=4)
+                return 1  # Success
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        raise E.ConfigError(f"Could not save configuration file: {e}", code = "5002")
+
+
 
 def save_setting(key_value, new_value):
     """Persist the given settings back to config.json, with type validation.
@@ -210,6 +219,17 @@ def save_setting(key_value, new_value):
     except (FileNotFoundError, json.JSONDecodeError) as e:
         raise E.ConfigError(f"Could not save configuration file: {e}", code = "5002")
 
+def load_preset(settings:dict):
+    try:
+        if len(load_setting_value("all")) != len(settings):
+            raise E.SyntaxError("Invalid dict.", code = "5002")
+        else:
+        # Use the correct file path (config_json) and dictionary (settings)
+            with open(config_json, 'w', encoding='utf-8') as f:
+                json.dump(settings, f, indent=4)
+                return 1  # Success
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        raise E.ConfigError(f"Could not save configuration file: {e}", code = "5002")
 
 if __name__ == "__main__":
     """Manual test block — for standalone verification only."""
