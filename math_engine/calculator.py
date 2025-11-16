@@ -40,16 +40,20 @@ getcontext().prec = 10000
 # -----------------------------
 
 def boolean(value):
-    try:
-        if isinstance(value, (str, bool)):
-            if value == "True" or value == True:
-                return True
-            elif value == "False" or value == False:
-                return False
-            else:
-                raise E.ConversionError("Couldnt convert type to bool", code = "8003")
-    except Exception as e:
-        raise E.ConversionError("Couldnt convert type to bool", code = "8003")
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        if value == "True":
+            return True
+        elif value == "False":
+            return False
+        elif value == "1":
+            return True
+        elif value == "0":
+            return False
+        raise E.ConversionError("Couldnt convert type to bool", code="8003")
+    raise E.ConversionError("Couldnt convert type to bool", code="8003")
+
 
 def isDecimal(value):
     if isinstance(value, Decimal):
@@ -300,6 +304,71 @@ FUNCTION_STARTS_OPTIMIZED = {
 }
 
 
+def non_decimal_scan(problem: str, b: int, settings: dict):
+    """
+    Versucht, eine nicht-dezimale Zahl (0b, 0x, 0o) am Index b zu parsen.
+
+    Gibt (Decimal(value), next_index) bei Erfolg zurück.
+    Gibt (None, b) zurück, wenn es sich nicht um eine nicht-dezimale Zahl handelt.
+    """
+    # Überprüfen, ob nicht-dezimale Zahlen überhaupt erlaubt sind
+    if not settings.get("allow_non_decimal", False):
+        return (None, b)
+
+    current_char = problem[b]
+    non_decimal_flags = {"b", "B", "x", "X", "o", "O"}
+    forbidden_char = {".", ","}
+
+    # Prüft auf das Präfix 0b, 0x oder 0o
+    if current_char == '0' and (b + 1 < len(problem)) and problem[b + 1] in non_decimal_flags:
+        prefix_char = problem[b + 1]
+
+        if prefix_char in ("b", "B"):
+            value_prefix = "0b"
+            prefix_name = "Binary"
+            allowed_char = {"0", "1"}
+        elif prefix_char in ("x", "X"):
+            value_prefix = "0x"
+            prefix_name = "Hexadecimal"
+            allowed_char = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+                            "A", "B", "C", "D", "E", "F", "a", "b", "c", "d", "e", "f"}
+        else:  # ("o", "O")
+            value_prefix = "0o"
+            prefix_name = "Octal"
+            allowed_char = {"0", "1", "2", "3", "4", "5", "6", "7"}
+
+        a = b + 2  # Start-Index für die Ziffern nach dem Präfix
+
+        # Falls nur "0b" ohne Ziffern dasteht, wird value_to_int fehlschlagen
+        if a >= len(problem) or problem[a] not in allowed_char:
+            # value_to_int wirft hier den korrekten SyntaxError
+            pass
+
+        # Ziffern sammeln
+        while a < len(problem):
+            char_a = problem[a]
+            if char_a in allowed_char:
+                value_prefix += char_a
+            elif char_a in forbidden_char:
+                raise E.ConversionError(f"Unexpected token in {prefix_name}: {char_a}", code="8004", position=a)
+            elif char_a in Operations or char_a == " " or char_a in "()":
+                # Ende der Zahl erreicht
+                break
+            else:
+                # Ungültiges Zeichen für diese Basis
+                raise E.ConversionError(f"Unexpected token in {prefix_name}: {char_a}", code="8004", position=a)
+            a += 1
+
+        # Nach der Schleife ist 'a' der Index *nach* der letzten Ziffer
+        int_value = value_to_int(str(value_prefix))
+        # Geben Sie den Wert und den nächsten zu lesenden Index 'a' zurück
+        return (Decimal(int_value), a)
+
+    # Es wurde keine nicht-dezimale Zahl gefunden
+    return (None, b)
+
+
+
 
 
 
@@ -357,104 +426,64 @@ def translator(problem, custom_variables, settings):
 
         # --- Numbers: digits and decimal separator (EXPONENTIAL NOTATION SUPPORT ADDED) ---
         if isInt(current_char) or (b >= 0 and current_char == "."):
-            str_number = current_char
-            has_decimal_point = False  # Only one dot allowed in a numeric literal
-            has_exponent_e = False  # Only one 'e' or 'E' allowed
 
-            allowed_char_hex = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "a", "b","c", "d", "e", "f"}
-            allowed_char_octal = {"0", "1", "2", "3", "4", "5", "6", "7"}
-            allowed_char_binary = {"0", "1"}
-            non_decimal_flags = {"b", "B", "x", "X", "o", "O"}
-            forbidden_char = {".", ","}
+            # 1. VERSUCH: Als nicht-dezimale Zahl parsen (0b, 0x, 0o)
+            parsed_value, new_index = non_decimal_scan(problem, b, settings)
 
-            prefix_name = ""
-            value_prefix = ""
+            if parsed_value is not None:
+                # Erfolg! Füge Wert hinzu und setze den Index auf das Ende der Zahl
+                full_problem.append(parsed_value)
+                b = new_index - 1  # -1, da die Schleife am Ende b+1 rechnet
 
-
-            if b <= len(problem)+1 and len(problem) > 1:
-                if int(current_char) == 0 and problem[b+1] in non_decimal_flags and settings["allow_non_decimal"] == True:
-                    if problem[b+1] == "b" or problem[b+1] == "B":
-                        value_prefix = "0b"
-                        prefix_name = "Binary"
-                        allowed_char = allowed_char_binary
-
-                    elif problem[b+1] == "x" or problem[b+1] == "X":
-                        value_prefix = "0x"
-                        prefix_name = "Hexadecimal"
-                        allowed_char = allowed_char_hex
-
-                    elif problem[b+1] == "o" or problem[b+1] == "O":
-                        value_prefix = "0o"
-                        prefix_name = "Octal"
-                        allowed_char = allowed_char_octal
-
-                    a =b+2
-                    while (a < len(problem)):
-                        if problem[a] not in allowed_char and problem[a] not in Operations and problem[a] != " ":
-                            raise E.ConversionError(f"Unexpected token in {prefix_name}:" + str(problem[a]), code="8004", position=b+1)
-                        elif problem[a] in forbidden_char:
-                            raise E.ConversionError(f"Unexpected token in {prefix_name}:" + str(problem[a]), code="8004", position=b+1)
-                        elif problem[a] in allowed_char:
-                            value_prefix += problem[a]
-                        else:
-                            break
-                        a += 1
-
-                    str_number = value_to_int(str(value_prefix))
-                    current_char = str_number
-                    b=a-1
-
-
-
-
-                else:
-                # Continue reading the number part
-                    while (b + 1 < len(problem)):
-                        next_char = problem[b + 1]
-
-
-                        # 1. Handle decimal points
-                        if next_char == ".":
-                            if has_decimal_point:
-                                raise E.SyntaxError(f"Double decimal point.", code="3008", position=b+1)
-                            has_decimal_point = True
-
-                        # 2. Handle the 'E' or 'e' for exponent
-                        elif next_char in ('e', 'E'):
-                            if temp_var == b and b > 0:
-                                raise E.SyntaxError(f"Multiple digit variables not supported.",
-                                                    code="3032", position=b+1)
-                            if has_exponent_e:
-                                # Cannot have two 'e's in a single number
-                                raise E.SyntaxError("Double exponent sign 'E'/'e'.", code="3031", position=b+1)
-                            has_exponent_e = True
-
-                        # 3. Handle the sign (+ or -) immediately following 'E'/'e'
-                        elif next_char in ('+', '-'):
-                            # The sign is only valid if it immediately follows 'e' or 'E'
-                            if not (problem[b] in ('e', 'E') and has_exponent_e):
-                                # If it's not following 'e'/'E', it's a separate unary operator.
-                                # Break the loop to treat it as an operator in the next iteration.
-                                break
-
-                        # 4. End the loop if the next character is not a number component
-                        elif not isInt(next_char):
-                            break
-
-                        # If we made it here, the character is a valid part of the number (digit, dot, E/e, or sign after E/e)
-                        b += 1
-                        str_number += problem[b]
-
-            # Validate the final collected string
-            if isfloat(str_number) or isInt(str_number):
-                full_problem.append(Decimal(str_number))
             else:
-                # This handles cases like '5E' without an exponent after it
-                if has_exponent_e and not str_number[-1].isdigit():
-                    raise E.SyntaxError("Missing exponent value after 'E'/'e'.", code="3032", position=b)
-                # If it's not a valid number, let the fallback handle it as a variable
-                # or raise an error in the original logic. We rely on the 'else' below.
+                # 2. VERSUCH: Als Standard-Dezimalzahl parsen (inkl. Exponent)
+                str_number = current_char
+                # Bug-Fix: has_decimal_point muss hier korrekt gesetzt werden
+                has_decimal_point = (current_char == '.')
+                has_exponent_e = False
 
+                # Kopieren Sie hier die Logik zum Parsen von Dezimalzahlen
+                # (Ihre ursprünglichen Zeilen 409 - 449)
+                while (b + 1 < len(problem)):
+                    next_char = problem[b + 1]
+
+                    # 1. Handle decimal points
+                    if next_char == ".":
+                        if has_decimal_point:
+                            raise E.SyntaxError(f"Double decimal point.", code="3008", position=b + 1)
+                        has_decimal_point = True
+
+                    # 2. Handle the 'E' or 'e' for exponent
+                    elif next_char in ('e', 'E'):
+                        if temp_var == b and b > 0:
+                            raise E.SyntaxError(f"Multiple digit variables not supported.",
+                                                code="3032", position=b + 1)
+                        if has_exponent_e:
+                            # Cannot have two 'e's in a single number
+                            raise E.SyntaxError("Double exponent sign 'E'/'e'.", code="3031", position=b + 1)
+                        has_exponent_e = True
+
+                    # 3. Handle the sign (+ or -) immediately following 'E'/'e'
+                    elif next_char in ('+', '-'):
+                        # The sign is only valid if it immediately follows 'e' or 'E'
+                        if not (problem[b] in ('e', 'E') and has_exponent_e):
+                            break
+
+                    # 4. End the loop if the next character is not a number component
+                    elif not isInt(next_char):
+                        break
+
+                    # If we made it here, the character is a valid part of the number
+                    b += 1
+                    str_number += problem[b]
+
+                # Validate the final collected string
+                if isfloat(str_number) or isInt(str_number):
+                    print(str_number)
+                    full_problem.append(Decimal(str_number))
+                else:
+                    if has_exponent_e and not str_number[-1].isdigit():
+                        raise E.SyntaxError("Missing exponent value after 'E'/'e'.", code="3032", position=b)
 
         # --- Operators ---
         elif isOp(current_char) != -1:
@@ -1007,16 +1036,14 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
 
 
         final_tree, cas, var_counter, expected_bool = ast(problem, settings, custom_variables)  # NEW: settings param enables AA handling
-
         if output_prefix != "boolean:" and expected_bool == True and output_prefix != "" and settings["correct_output_format"]== False:
             raise E.SyntaxError("Couldnt convert result into the given prefix", code="3037")
 
         elif output_prefix != "boolean:" and expected_bool == True and output_prefix == "":
             output_prefix = "boolean:"
 
-        elif output_prefix != "boolean:" and expected_bool == False and settings["correct_output_format"]== True:
+        elif output_prefix != "boolean:" and expected_bool == True and settings["correct_output_format"]== True:
             output_prefix = "boolean:"
-
         if validate == 0:
             result = final_tree
         if debug == True:
@@ -1081,7 +1108,6 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
 
             else:
                 output_string = result
-
             if output_prefix == "":
                 output_prefix = settings["default_output_format"]
             if output_prefix == "decimal:":
@@ -1093,7 +1119,6 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
 
             elif output_prefix == "string:":
                 try:
-                    #str(output_string)
                     return str(output_string)
                 except Exception as e:
                     raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
