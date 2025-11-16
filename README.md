@@ -9,6 +9,7 @@ A fast, safe, configurable expression parser and calculator for Python
 **math_engine** is a powerful expression evaluation library designed for developers who need a **safe**, **configurable**, and **extendable** alternative to Python’s built-in `eval()` or other ad-hoc parsers.
 It provides a complete pipeline:
 
+
 * Tokenizer
 * AST (Abstract Syntax Tree) parser
 * Evaluator (numeric + equation solver)
