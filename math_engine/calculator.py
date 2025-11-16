@@ -479,7 +479,12 @@ def translator(problem, custom_variables, settings):
 
                 # Validate the final collected string
                 if isfloat(str_number) or isInt(str_number):
-                    print(str_number)
+                    if settings["only_hex"] == True:
+                        str_number = value_to_int("0x"+str_number)
+                    elif settings["only_binary"] == True:
+                        str_number = value_to_int("0b"+str_number)
+                    elif settings["only_octal"] == True:
+                        str_number = value_to_int("0O"+str_number)
                     full_problem.append(Decimal(str_number))
                 else:
                     if has_exponent_e and not str_number[-1].isdigit():
@@ -1044,6 +1049,14 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
 
         elif output_prefix != "boolean:" and expected_bool == True and settings["correct_output_format"]== True:
             output_prefix = "boolean:"
+
+        if output_prefix == "" and settings["only_hex"] == True:
+            output_prefix = "hexadecimal:"
+        elif output_prefix == "" and settings["only_binary"] == True:
+            output_prefix = "boolean:"
+        elif output_prefix == "" and settings["only_octal"] == True:
+            output_prefix = "octal:"
+
         if validate == 0:
             result = final_tree
         if debug == True:

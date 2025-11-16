@@ -7,7 +7,7 @@
     "debug": false,
     "correct_output_format": true,
     "default_output_format": "decimal:",
-    "only_hex": false,
+    "only_hex": true,
     "only_binary": false,
     "only_octal": false
 }
