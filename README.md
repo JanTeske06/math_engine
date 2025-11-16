@@ -1,238 +1,351 @@
+# Math Engine 0.2.1
+
+[![PyPI Version](https://img.shields.io/pypi/v/math-engine.svg)](https://pypi.org/project/math-engine/)
+[![License: MIT](https://img.shields.io/pypi/l/math-engine.svg)](https://opensource.org/licenses/MIT)
+[![Python Versions](https://img.shields.io/pypi/pyversions/math-engine.svg)](https://pypi.org/project/math-engine/)
+
+A fast, safe, configurable expression parser and calculator for Python
+
+**math_engine** is a powerful expression evaluation library designed for developers who need a **safe**, **configurable**, and **extendable** alternative to Python’s built-in `eval()` or other ad-hoc parsers.
+It provides a complete pipeline:
+
+* Tokenizer
+* AST (Abstract Syntax Tree) parser
+* Evaluator (numeric + equation solver)
+* Formatter and type-safe output system
+* Support for decimal, integer, binary, octal, hexadecimal
+* Custom variables
+* Scientific functions
+* Strict error codes for reliable debugging and automated testing
+
+**Version 0.2.1** adds extensive non-decimal number support (hex, binary, octal), prefix-based type casting, improved settings management, and expanded error reporting.
+
+This library is ideal for:
+
+* Developers building calculators, interpreters, scripting engines
+* Students learning compilers, math parsing, and ASTs
+* Security-sensitive applications where `eval()` is not acceptable
+* Anyone who needs equation solving, custom formats, and strict errors
 
 ---
 
-# **Math Engine**
+# Features
 
+### Core Features
 
-**Math Engine** is a high-precision, modular calculation engine written in pure Python.  
-It provides a complete processing pipeline:
+* Full AST-based expression parsing
+* Safe evaluation (no execution of Python code)
+* Decimal, Integer, Float, Boolean, Binary, Octal, Hexadecimal
+* Custom variables
+* Linear equation solving (`x + 3 = 7`)
+* Scientific functions: `sin`, `cos`, `tan`, `log`, `sqrt`, `π`, `e^`
+* Automatic format correction (`correct_output_format`)
+* Strong error handling with unique codes
+* Settings system with presets
+* Optional strict modes:
 
-**tokenizing → parsing (AST) → evaluating → optional equation solving**
+  * `only_hex`
+  * `only_binary`
+  * `only_octal`
 
-The package is available on PyPI:
+### Non-Decimal Support (0.2.1)
 
-```bash
+* Read binary `0b1101`
+* Read octal `0o755`
+* Read hexadecimal `0xFF`
+* Convert results into binary/hex/octal format
+* Enforce only-hex/only-binary/only-octal mode
+* Prefix parsing (`hex:`, `bin:`, `int:`, `str:` ...)
+
+---
+
+# Installation
+
+```
 pip install math-engine
-````
-
----
-
-## ✨ Features
-
-* **Tokenizer**
-  Converts raw text to tokens: numbers, operators, parentheses, variables, functions.
-
-* **Parser (AST)**
-  Recursive-descent parser with correct operator precedence.
-
-* **Evaluator**
-
-  * High-precision `Decimal` arithmetic (precision = 50)
-  * Fraction support where needed
-  * Scientific functions: `sin`, `cos`, `tan`, `log`, `√`, `π`, `e`, etc.
-  * Supports **variables** via dictionary injection
-    `evaluate("2+LEVEL", {"LEVEL": 0.5})`
-
-* **Equation Solver**
-
-  * Solves **linear equations with one variable**
-
-* **Settings system**
-
-  * Configurable decimal places
-  * Output formats
-  * Scientific mode
-  * Robust load/save system via `config_manager`
-
-* **Custom errors** with clean messages.
-
----
-
-
-
-## 🚀 Quick Start
-
-### **1. Basic Evaluation**
-
-```python
-from math_engine import evaluate
-
-print(evaluate("3 * (2 + 5) - 4^2")) # -> 5
 ```
 
 ---
 
+# Quick Start
 
-### **2. Comparison**
+## Basic Evaluation
 
 ```python
-from math_engine import evaluate
+import math_engine
 
-print(evaluate("((3 * 3) / 2) = 7 + 5")) # -> False
+math_engine.evaluate("2 + 2")
+# Decimal('4')
+```
+
+## Different Output Formats
+
+```python
+math_engine.evaluate("hex: 255")
+# '0xff'
+
+math_engine.evaluate("binary: 13")
+# '0b1101'
+
+math_engine.evaluate("octal: 64")
+# '0o100'
+```
+
+## Automatic Format Correction
+
+```python
+math_engine.load_preset({"correct_output_format": True})
+math_engine.evaluate("boolean: 3+3=6")
+# True
 ```
 
 ---
 
+# Prefix System (Casting Syntax)
 
-### **3. Using Variables**
+math_engine supports a powerful prefix-based casting system:
 
-You can inject any number of variables:
+| Prefix   | Meaning     | Example                            |
+| -------- | ----------- | ---------------------------------- |
+| `dec:`   | Decimal     | `dec: 3/2` → `1.50`                |
+| `int:`   | Integer     | `int: 10/3` → error if non-integer |
+| `float:` | Float       | `float: 1/3`                       |
+| `bool:`  | Boolean     | `bool: 3 = 3`                      |
+| `hex:`   | Hexadecimal | `hex: 15`                          |
+| `bin:`   | Binary      | `bin: 5`                           |
+| `oct:`   | Octal       | `oct: 64`                          |
+| `str:`   | String      | `str: 3+3` → `"6"`                 |
+
+Example:
 
 ```python
-from math_engine import evaluate
+math_engine.evaluate("hex: 3 + 3")
+# '0x6'
+```
 
-test_vars = {
-    "LEVEL": 0.5,
-    "ENABLED": 1,
+---
+
+# Variables
+
+```python
+vars = {
+    "A": 10,
+    "B": 5
 }
 
-expr = "2 + 2 - LEVEL - 1"
-result = evaluate(expr, test_vars)
-
-print(result)     # -> 2.5 (depending on formatting settings)
+math_engine.evaluate("A + B", custom_variables=vars)
+# Decimal('15')
 ```
 
-Useful for:
-
-* config systems
-* scripting
-* modding tools
-* dynamic calculations
+Variables must be single characters (to enforce safety and keep parsing simple).
 
 ---
 
-### **4. Solving Equations**
+# Scientific Functions
 
 ```python
-from math_engine import evaluate
-
-solution = evaluate("3x + 5 = 11")
-print(solution)   # -> 2 (for x = 2)
+math_engine.evaluate("sin(30)")
+math_engine.evaluate("cos(90)")
+math_engine.evaluate("log(100,10)")
+math_engine.evaluate("√(16)")
+math_engine.evaluate("pi * 2")
 ```
+
+All functions are processed by the internal ScientificEngine.
 
 ---
 
-### **5. Scientific Functions**
+# Linear Equation Solver
 
 ```python
-from math_engine import evaluate
-
-print(evaluate("sin(3π/4)")) # -> 0.71
-print(evaluate("√(81)"))     # -> 9
-print(evaluate("log(100)"))  # -> 4.61
+math_engine.evaluate("x + 3 = 10")
+# Decimal('7')
 ```
 
----
+Invalid or nonlinear equations produce errors with codes like:
 
-## ⚙️ Settings: Load / Modify / Save
-
-Math Engine includes a built-in settings system (`config_manager`)
-to control:
-
-* Decimal precision
-* Fraction vs Decimal output
-* Thousands separators
+* 3005 – Non-linear equation
+* 3002 – Multiple variables
+* 3022 – One side empty
 
 ---
 
-### **Load all existing settings**
+# Non-Decimal Numbers (Binary, Octal, Hex)
 
 ```python
-from math_engine import load_all_settings
+math_engine.evaluate("0xFF + 3")
+# Decimal('258')
 
-print(load_all_settings())
+math_engine.evaluate("0b1010 * 3")
+# Decimal('30')
 ```
 
-This loads e.g.:
+### Force-only-hex mode
 
-```json
-{
+```python
+settings = math_engine.load_all_settings()
+settings["only_hex"] = True
+math_engine.load_preset(settings)
+
+math_engine.evaluate("FF + 3")
+# Decimal('258')
+```
+
+Input validation ensures safety.
+
+---
+
+# Settings System
+
+You may load presets:
+
+```python
+preset = {
     "decimal_places": 2,
     "use_degrees": false,
     "allow_augmented_assignment": true,
-    "fractions": false
+    "fractions": false,
+    "allow_non_decimal": true,
+    "debug": false,
+    "correct_output_format": true,
+    "default_output_format": "decimal:",
+    "only_hex": false,
+    "only_binary": false,
+    "only_octal": false
 }
+
+math_engine.load_preset(preset)
 ```
 
-
-### **Load specific existing settings**
+Or modify single settings:
 
 ```python
-from math_engine import load_one_setting
-
-print(load_one_setting("decimal_places")) # -> 2
+math_engine.save_setting("decimal_places", 10)
 ```
----
-
-### **Modify / save settings in code**
-```python
-from math_engine import change_setting
-
-change_setting("decimal_places", 10)  # -> 1 (for saved successfully)
-change_setting("decimal_places", "a") # -> -1 (for  not saved successfully)
-```
-
 
 ---
 
+# Error Handling
 
-### **Use settings when evaluating**
+Every error is a custom exception with:
 
-If your engine exposes something like:
+* Human-readable message
+* Machine-readable error code
+* Position (if applicable)
+* The original expression
+
+Example:
 
 ```python
-from math_engine import evaluate, load_all_settings
-
-settings = load_all_settings()
-
-print(evaluate("1/3"))
+try:
+    math_engine.evaluate("1/0")
+except math_engine.error.CalculationError as e:
+    print(e.code)  # 3003
 ```
 
-This allows:
+### Example Error Codes
 
-* consistent output across UI/CLI
-* user-customizable formatting
-* integration with your calculator GUI
-
-(*If your package exposes the settings differently, I can adapt this section.*)
+| Code | Meaning                     |
+| ---- | --------------------------- |
+| 3003 | Division by zero            |
+| 3034 | Empty input                 |
+| 3036 | Multiple = signs            |
+| 3032 | Multiple-character variable |
+| 8000 | Conversion to int failed    |
+| 8006 | Output conversion error     |
 
 ---
 
-## 📁 Project Structure
+# Testing and Reliability
 
-```
-math_engine/
-├── MathEngine.py        # Core tokenizer, parser, evaluator, solver
-├── ScientificEngine.py  # Scientific functions
-├── config_manager.py    # Load + save user settings
-├── error.py             # Custom error classes
-└── config.json          # Saves all the settings
-└── __init__.py          # Exports evaluate(), solve(), MathEngine, etc.
+math_engine is designed with testing in mind:
 
+* Full error-code consistency
+* Strict syntax rules
+* Unit-test friendly behavior
+* No reliance on Python’s runtime execution
+
+You can easily test error codes:
+
+```python
+import pytest
+from math_engine import error as E
+
+def test_div_zero():
+    with pytest.raises(E.CalculationError) as exc:
+        math_engine.evaluate("1/0")
+    assert exc.value.code == "3003"
 ```
 
 ---
 
-## 🛠️ Development
+# Performance
 
-```bash
-git clone https://github.com/JanTeske06/math_engine
-cd math_engine
-pip install -e .
-```
+* No use of Python `eval()`
+* Predictable performance through AST evaluation
+* Optimized tokenization
+* Fast conversion of non-decimal numbers
 
-Run tests:
+Future updates focus on:
 
-```bash
-pytest
-```
-
+* Expression caching
+* Compiler-like optimizations
+* Faster scientific evaluation
 
 ---
 
-## 📜 License
+# Use Cases
 
-This project is licensed under the **MIT License** - see the dedicated [LICENSE](LICENSE) file for details.
+### Calculator Applications
+
+Build full scientific calculators, both GUI and command line.
+
+### Education
+
+Great for learning about lexers, parsers, ASTs, and expression evaluation.
+
+### Embedded Scripting
+
+Safe math evaluation inside larger apps.
+
+### Security-sensitive Input
+
+Rejects arbitrary Python code and ensures controlled evaluation.
+
+### Data Processing
+
+Conversion between hex/bin/decimal is easy and reliable.
+
+---
+
+# Roadmap (Future Versions)
+
+* Non-decimal output formatting upgrades
+* Strict type-matching modes
+* Function overloading
+* Bitwise operators (`&`, `|`, `^`, `<<`, `>>`)
+* Memory/register system
+* Speed optimization via caching
+* User-defined functions
+* Expression pre-compilation
+* Better debugging output
+
+---
+
+# License
+
+MIT License
+
+---
+
+# Contributing
+
+Contributions are welcome.
+Feel free to submit issues or PRs on GitHub:
+
+```
+https://github.com/JanTeske06/math_engine
+```
 
 ---
 
