@@ -17,6 +17,9 @@ import fractions
 import inspect
 from typing import Union
 import math
+
+from docutils.utils import extract_options
+
 from . import config_manager as config_manager
 from . import ScientificEngine
 from . import error as E
@@ -560,6 +563,7 @@ def ast(received_string, settings, custom_variables):
     d = 0
     mutliple_equalsign = False
     temp_position = -2
+    expected_bool = False
     while d < len(analysed):
         "3==3"
         if analysed[d] == "=":
@@ -568,6 +572,7 @@ def ast(received_string, settings, custom_variables):
             elif temp_position == -2 and temp_position != d-1:
                 temp_position = d
             elif temp_position != -2 and temp_position == d-1:
+                expected_bool = True
                 temp_position = d
 
         d+=1
@@ -780,7 +785,7 @@ def ast(received_string, settings, custom_variables):
 
     # `cas` may or may not be set above; default to False
     cas = locals().get('cas', False)
-    return final_tree, cas, var_counter
+    return final_tree, cas, var_counter,expected_bool
 
 
 # -----------------------------
@@ -1001,7 +1006,17 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
                 break
 
 
-        final_tree, cas, var_counter = ast(problem, settings, custom_variables)  # NEW: settings param enables AA handling
+        final_tree, cas, var_counter, expected_bool = ast(problem, settings, custom_variables)  # NEW: settings param enables AA handling
+
+        if output_prefix != "boolean:" and expected_bool == True and output_prefix != "" and settings["correct_output_format"]== False:
+            raise E.SyntaxError("Couldnt convert result into the given prefix", code="3037")
+
+        elif output_prefix != "boolean:" and expected_bool == True and output_prefix == "":
+            output_prefix = "boolean:"
+
+        elif output_prefix != "boolean:" and expected_bool == False and settings["correct_output_format"]== True:
+            output_prefix = "boolean:"
+
         if validate == 0:
             result = final_tree
         if debug == True:

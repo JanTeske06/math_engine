@@ -104,7 +104,6 @@ def validate(expr: str,
 
 
 if __name__ == '__main__':
-    problem = "1=2"
-    set_memory("Level", "a")
-    print(evaluate(problem))
+    problem = "int:3==3"
+    print(evaluate(problem) )
     print(type(evaluate(problem)))
