@@ -28,7 +28,7 @@ from . import error as E
 debug = False
 
 # Supported operators / functions (kept as simple lists for quick membership checks)
-Operations = ["+", "-", "*", "/", "=", "^"]
+Operations = ["+", "-", "*", "/", "=", "^", ">>", "<<", "<", ">"]
 Science_Operations = ["sin", "cos", "tan", "10^x", "log", "e^", "π", "√"]
 
 # Global Decimal precision used by this module (UI may also enforce this before calls)
@@ -200,6 +200,16 @@ class BinOp:
             return left_value + right_value
         elif self.operator == '-':
             return left_value - right_value
+
+        elif self.operator == '<<':
+            if left_value % 1 != 0 or right_value % 1 != 0:
+                raise E.CalculationError("Bitshift requires integers.", code="3041")
+            return Decimal(int(left_value) << int(right_value))
+
+        elif self.operator == '>>':
+            if left_value % 1 != 0 or right_value % 1 != 0:
+                raise E.CalculationError("Bitshift requires integers.", code="3041")
+            return Decimal(int(left_value) >> int(right_value))
         elif self.operator == '*':
             return left_value * right_value
         elif self.operator == '^':
@@ -492,7 +502,29 @@ def translator(problem, custom_variables, settings):
 
         # --- Operators ---
         elif isOp(current_char) != -1:
-            full_problem.append(current_char)
+            if current_char != "<" and current_char != ">":
+                full_problem.append(current_char)
+            elif current_char == "<" and b<= len(problem)+1:
+                if problem[b+1] == "<":
+                    full_problem.append("<<")
+                    b+=1
+                elif problem[b+1] == ">":
+                    raise E.SyntaxError("Invalid shift Operation <>", code = "3040")
+
+
+            elif current_char == ">" and b <= len(problem) + 1:
+                following_char = problem[b + 1]
+                if problem[b + 1] == ">":
+                    full_problem.append(">>")
+                    b += 1
+                elif problem[b+1] == "<":
+                    raise E.SyntaxError("Invalid shift Operation ><", code = "3040")
+
+            else:
+                raise E.SyntaxError("Unknown Error.", code = "9999")
+
+
+
 
         # --- Whitespace (ignored) ---
         elif current_char == " ":
@@ -799,6 +831,16 @@ def ast(received_string, settings, custom_variables):
             current_subtree = BinOp(current_subtree, operator, right_part)
         return current_subtree
 
+    def parse_shift(tokens):
+        current_subtree = parse_sum(tokens)
+        while tokens and tokens[0] in ("<<", ">>"):
+            operator = tokens.pop(0)
+            if debug == True:
+                print("Currently at:" + str(operator) + "in parse_sum")
+            right_side = parse_sum(tokens)
+            current_subtree = BinOp(current_subtree, operator, right_side)
+        return current_subtree
+
     def parse_sum(tokens):
         """Addition and subtraction."""
         current_subtree = parse_term(tokens)
@@ -810,12 +852,13 @@ def ast(received_string, settings, custom_variables):
             current_subtree = BinOp(current_subtree, operator, right_side)
         return current_subtree
 
+
     def parse_gleichung(tokens):
         """Optional '=' at the top level: build BinOp('=') when present."""
-        left_side = parse_sum(tokens)
+        left_side = parse_shift(tokens)
         if tokens and tokens[0] == "=":
             operator = tokens.pop(0)
-            right_side = parse_sum(tokens)
+            right_side = parse_shift(tokens)
             return BinOp(left_side, operator, right_side)
         return left_side
 

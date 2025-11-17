@@ -133,6 +133,8 @@ ERROR_MESSAGES = {
     "3037" : "Two equal signs after another, but another type of output was forced.",
     "3038" : "Variables not supported with only_hex, only_binary or only_octal mode.",
     "3039" : "Multiple Variables",
+    "3040" : "Invalid shift operation", # +operation
+    "3041" : "Bitshift requires int.",
 
     "4000" : "Couldnt find memory entry.",
 
