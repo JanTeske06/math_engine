@@ -135,6 +135,7 @@ ERROR_MESSAGES = {
     "3039" : "Multiple Variables",
     "3040" : "Invalid shift operation", # +operation
     "3041" : "Bitshift requires int.",
+    "3042" : "XOR requires Integers",
 
     "4000" : "Couldnt find memory entry.",
 

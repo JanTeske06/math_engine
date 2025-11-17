@@ -28,7 +28,7 @@ from . import error as E
 debug = False
 
 # Supported operators / functions (kept as simple lists for quick membership checks)
-Operations = ["+", "-", "*", "/", "=", "^", ">>", "<<", "<", ">"]
+Operations = ["+", "-", "*", "/", "=", "^", ">>", "<<", "<", ">", "|","&" ]
 Science_Operations = ["sin", "cos", "tan", "10^x", "log", "e^", "π", "√"]
 
 # Global Decimal precision used by this module (UI may also enforce this before calls)
@@ -198,8 +198,20 @@ class BinOp:
 
         if self.operator == '+':
             return left_value + right_value
+
         elif self.operator == '-':
             return left_value - right_value
+
+        elif self.operator == '&':
+            return Decimal(int(left_value) & int(right_value))
+
+        elif self.operator == '|':
+            return Decimal(int(left_value) | int(right_value))
+
+        elif self.operator == '^':
+            if left_value % 1 != 0 or right_value % 1 != 0:
+                raise E.CalculationError("XOR requires integers.", code="3042")
+            return Decimal(int(left_value) ^ int(right_value))
 
         elif self.operator == '<<':
             if left_value % 1 != 0 or right_value % 1 != 0:
@@ -210,14 +222,18 @@ class BinOp:
             if left_value % 1 != 0 or right_value % 1 != 0:
                 raise E.CalculationError("Bitshift requires integers.", code="3041")
             return Decimal(int(left_value) >> int(right_value))
+
         elif self.operator == '*':
             return left_value * right_value
+
         elif self.operator == '**':
             return left_value ** right_value
+
         elif self.operator == '/':
             if right_value == 0:
                 raise E.CalculationError("Division by zero", code="3003")
             return left_value / right_value
+
         elif self.operator == '=':
             # Equality is evaluated to a boolean (used for "= True/False" responses)
             return left_value == right_value
@@ -838,8 +854,6 @@ def ast(received_string, settings, custom_variables):
         current_subtree = parse_sum(tokens)
         while tokens and tokens[0] in ("<<", ">>"):
             operator = tokens.pop(0)
-            if debug == True:
-                print("Currently at:" + str(operator) + "in parse_sum")
             right_side = parse_sum(tokens)
             current_subtree = BinOp(current_subtree, operator, right_side)
         return current_subtree
@@ -849,16 +863,37 @@ def ast(received_string, settings, custom_variables):
         current_subtree = parse_term(tokens)
         while tokens and tokens[0] in ("+", "-"):
             operator = tokens.pop(0)
-            if debug == True:
-                print("Currently at:" + str(operator) + "in parse_sum")
             right_side = parse_term(tokens)
             current_subtree = BinOp(current_subtree, operator, right_side)
         return current_subtree
 
+    def parse_bor(tokens):
+        current_subtree = parse_bxor(tokens)
+        while tokens and tokens[0] == "|":
+            operator = tokens.pop(0)
+            right_side = parse_bxor(tokens)
+            current_subtree = BinOp(current_subtree, operator, right_side)
+        return current_subtree
+
+    def parse_bxor(tokens):
+        current_subtree = parse_band(tokens)
+        while tokens and tokens[0] == "^":
+            operator = tokens.pop(0)
+            right_side = parse_band(tokens)
+            current_subtree = BinOp(current_subtree, operator, right_side)
+        return current_subtree
+
+    def parse_band(tokens):
+        current_subtree = parse_shift(tokens)
+        while tokens and tokens[0] == "&":
+            operator = tokens.pop(0)
+            right_side = parse_shift(tokens)
+            current_subtree = BinOp(current_subtree, operator, right_side)
+        return current_subtree
 
     def parse_gleichung(tokens):
         """Optional '=' at the top level: build BinOp('=') when present."""
-        left_side = parse_shift(tokens)
+        left_side = parse_bor(tokens)
         if tokens and tokens[0] == "=":
             operator = tokens.pop(0)
             right_side = parse_shift(tokens)
@@ -1021,8 +1056,7 @@ def value_to_int(value):
             raise E.ConversionError(f"Unexpected conversion error: {e}", code="8001")
 
 
-
-def int_to_value(number, output_prefix):
+def int_to_value(number, output_prefix, settings):
     if isinstance(number, (Decimal, float, int)) and number % 1 != 0:
         raise E.ConversionError("Cannot convert non-integer value to non decimal.", code="8003")
     try:
@@ -1033,16 +1067,28 @@ def int_to_value(number, output_prefix):
     except Exception:
         raise E.ConversionError("Input could not be converted to a Python integer.", code="8004")
 
-    if not isinstance(number, int):
-        raise E.ConversionError("Converter didnt receive int: " + str(type(number)), code="8002")
+    val = number
+    word_size = settings.get("word_size", 0)
+    signed_mode = settings.get("signed_mode", True)
+
+    if word_size > 0:
+        limit = 1 << word_size
+        mask = limit - 1
+
+        val = val & mask
+
+        if signed_mode:
+            msb_threshold = limit >> 1
+            if val >= msb_threshold:
+                val = val - limit
 
     try:
         if output_prefix == "hexadecimal:":
-            converted_value = hex(number)
+            converted_value = hex(val)
         elif output_prefix == "binary:":
-            converted_value = bin(number)
+            converted_value = bin(val)
         elif output_prefix == "octal:":
-            converted_value = oct(number)
+            converted_value = oct(val)
         return converted_value
     except Exception as e:
         raise E.ConversionError(f"Couldnt convert int to non decimal: {e}", code="8001")
@@ -1119,8 +1165,7 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
 
         if validate == 0:
             result = final_tree
-        if debug == True:
-            print(final_tree)
+
         # Decide evaluation mode
         if cas and var_counter > 0:
             # Solve linear equation for first variable symbol in the token stream
@@ -1209,21 +1254,21 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
 
             elif output_prefix == "hexadecimal:":
                 try:
-                    int_to_value(output_string, output_prefix)
-                    return int_to_value(output_string, output_prefix)
+                    int_to_value(output_string, output_prefix, settings)
+                    return int_to_value(output_string, output_prefix, settings)
                 except Exception as e:
                     raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
 
             elif output_prefix == "binary:":
                 try:
-                    int_to_value(output_string, output_prefix)
-                    return int_to_value(output_string, output_prefix)
+                    int_to_value(output_string, output_prefix, settings)
+                    return int_to_value(output_string, output_prefix, settings)
                 except Exception as e:
                     raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
             elif output_prefix == "octal:":
                 try:
-                    int_to_value(output_string, output_prefix)
-                    return int_to_value(output_string, output_prefix)
+                    int_to_value(output_string, output_prefix, settings)
+                    return int_to_value(output_string, output_prefix, settings)
                 except Exception as e:
                     raise E.ConversionOutputError("Couldnt convert type to" + str(output_prefix), code="8003")
 

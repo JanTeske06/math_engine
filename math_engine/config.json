@@ -10,6 +10,6 @@
     "only_hex": false,
     "only_binary": false,
     "only_octal": false,
-    "signed_mode": false,
+    "signed_mode": true,
     "word_size": 0
 }
