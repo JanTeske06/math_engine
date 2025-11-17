@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "math-engine"
-version = "0.3.1"
+version = "0.3.2"
 authors = [
   { name="Jan Teske", email="jan.teske.06@gmail.com" },
 ]

@@ -116,7 +116,8 @@ def validate(expr: str,
             print(Equation + str(e.equation))
 
 
-
+def reset_settings():
+    config_manager.reset_settings()
 #
 # if __name__ == '__main__':
 #     #problem = ("x+1", x=5)
