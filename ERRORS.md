@@ -67,4 +67,6 @@ This is a complete list of all error codes thrown by **math_engine**.
 | **8004** | Input could not be converted to a Python integer. |
 | **8005** | Forbidden value in Hex |
 | **8006** | Result value not compatible with output prefix |
+| **8007** | Failed Bit Operation |
+| **8008** | Comma in BitNot |
 | **9999** | Unexpected Error:  |

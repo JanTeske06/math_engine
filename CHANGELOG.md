@@ -4,7 +4,40 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+---
+## [0.5.0] - 2025-11-17 
 
+### Added
+- **Full Bit Manipulation Function Suite:**  
+  Math Engine now includes a complete set of bit utilities often found in low-level programming:
+  - `setbit(x, n)` – set bit *n*
+  - `clrbit(x, n)` – clear bit *n*
+  - `togbit(x, n)` – toggle bit *n*
+  - `testbit(x, n)` – check whether bit *n* is set
+  - `bitand(x, y)` – bitwise AND
+  - `bitor(x, y)` – bitwise OR
+  - `bitxor(x, y)` – bitwise XOR
+  - `bitnot(x)` – bitwise NOT
+  - `shl(x, n)` – logical left shift
+  - `shr(x, n)` – logical right shift
+
+- **Mixed-Base Support for Bit Operations:**  
+  Bit functions now accept operands in any format (binary, hex, octal, decimal), and all inputs are normalized safely before evaluation.
+
+- **Underscore Support in Non-Decimal Literals:**  
+  Numbers such as `0b1111_0000`, `0xFF_FF`, and `0o755_123` are now valid, matching modern Python syntax.
+
+### Improved
+- **Parser Stability:**  
+  More robust detection of invalid characters inside non-decimal literals, producing clearer and more accurate `8004` conversion errors.
+- **Test Coverage:**  
+  Extensive new test suite for every bit function, mixed bases, shift operations, and underscore handling.
+
+### Fixed
+- Corrected `shr()` behavior for right shifts on binary literals.
+- Resolved tokenizer edge cases involving `only_hex`/`only_binary` strict modes interacting with function calls.
+
+---
 ## [0.4.0] - 2025-11-17
 
 ### Added
@@ -33,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.2.x] - 2025-11-15
+## [0.2.0] - 2025-11-15
 
 ### Added
 - **Equation Solver:** Implemented a solver for linear equations (e.g., `x + 5 = 10`).
@@ -43,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.1.x] - Initial Release - 2025-11-13
+## [0.1.0] - Initial Release - 2025-11-13
 
 ### Added
 - **Core Architecture:** Implemented the Tokenizer, AST Parser, and Evaluator pipeline.

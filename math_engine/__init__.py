@@ -8,7 +8,7 @@ from . import error as E
 from typing import Any, Mapping, Optional
 from typing import Union
 from typing import Any, Mapping
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 memory = {}
 
 def set_memory(key_value: str, value:str):
@@ -119,10 +119,10 @@ def validate(expr: str,
 def reset_settings():
     config_manager.reset_settings()
 #
-if __name__ == '__main__':
-    #problem = ("x+1", x=5)
-    print(math_engine.evaluate("bitxor(shr(shl(bitnot(7), 2), 4), 3) + 100"))
-    print(evaluate("int:(bitand(0b1101,0b1011)+ bitor(0b0011,0b0101)+ bitxor(0xF0,0b1010)+ shl(3,4)+ shr(0b100000,3)+ setbit(0b0001,2)+ clrbit(0b1111,1)+ togbit(0b1010,1))"))
-    print(evaluate("bool:testbit(0b1010, 3)"))
-    #print(math_engine.evaluate("bitor(bitand(0b101110110, bitnot(4096)),160) * 3"))
-    config_manager.reset_settings()
+# if __name__ == '__main__':
+#     #problem = ("x+1", x=5)
+#     print(math_engine.evaluate("bitxor(shr(shl(bitnot(7), 2), 4), 3) + 100"))
+#     print(evaluate("int:(bitand(0b1101,0b1011)+ bitor(0b0011,0b0101)+ bitxor(0xF0,0b1010)+ shl(3,4)+ shr(0b100000,3)+ setbit(0b0001,2)+ clrbit(0b1111,1)+ togbit(0b1010,1))"))
+#     print(evaluate("bool:testbit(0b1010, 3)"))
+#     #print(math_engine.evaluate("bitor(bitand(0b101110110, bitnot(4096)),160) * 3"))
+#     config_manager.reset_settings()

@@ -1,5 +1,5 @@
 
-# Math Engine 0.4.0
+# Math Engine 0.5.0
 
 [![PyPI Version](https://img.shields.io/pypi/v/math-engine.svg)](https://pypi.org/project/math-engine/)
 [![License: MIT](https://img.shields.io/pypi/l/math-engine.svg)](https://opensource.org/licenses/MIT)
@@ -19,7 +19,7 @@ It provides a complete pipeline:
 * Scientific functions
 * Strict error codes for reliable debugging and automated testing
 
-**Version 0.4.0** introduces a powerful **Command Line Interface (CLI)**
+
 
 This library is ideal for:
 
@@ -248,7 +248,7 @@ Non-decimal parsing respects the setting `allow_non_decimal`. If it is set to `F
 
 -----
 
-# Bitwise Operations & Developer Mode (v0.4.0)
+# Bitwise Operations & Developer Mode (v0.5.0)
 
 Math Engine can act as a **programmer's calculator**. It supports standard operator precedence and bitwise logic.
 
@@ -311,8 +311,37 @@ math_engine.load_preset(settings)
 math_engine.evaluate("FF + 3")
 # Decimal('258')
 ```
-
 Input validation ensures safety and prevents mixing incompatible formats in strict modes.
+
+---
+## Bitwise & Low-Level Operations
+
+Math Engine now includes a rich collection of low-level bit manipulation functions commonly used in systems programming, embedded development, cryptography, and hardware-oriented tools.
+
+**Bitwise functions:**
+- `bitand(x, y)` — bitwise AND  
+- `bitor(x, y)` — bitwise OR  
+- `bitxor(x, y)` — bitwise XOR  
+- `bitnot(x)` — bitwise NOT  
+
+**Bit manipulation utilities:**
+- `setbit(x, n)` — sets bit *n*  
+- `clrbit(x, n)` — clears bit *n*  
+- `togbit(x, n)` — toggles bit *n*  
+- `testbit(x, n)` — returns 1 if bit *n* is set, else 0  
+
+**Shift operations:**
+- `shl(x, n)` — logical left shift  
+- `shr(x, n)` — logical right shift  
+
+All bitwise functions:
+- respect `word_size` and `signed_mode`  
+- support overflow/wrap-around behavior  
+- fully support binary, hex, decimal, and octal inputs  
+- participate in the AST just like standard operators  
+- support underscores in non-decimal literals (`0b1111_0000`)  
+
+This makes Math Engine behave like a full-featured programmer’s calculator with CPU-like precision control.
 
 -----
 
