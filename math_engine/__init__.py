@@ -121,5 +121,6 @@ def reset_settings():
 #
 if __name__ == '__main__':
     #problem = ("x+1", x=5)
-    print(math_engine.evaluate("bitor(bitand(0b101110110, bitnot(4096)),160) * 3"))
+    print(math_engine.evaluate("bitxor(shr(shl(bitnot(7), 2), 4), 3) + 100"))
+    #print(math_engine.evaluate("bitor(bitand(0b101110110, bitnot(4096)),160) * 3"))
     config_manager.reset_settings()

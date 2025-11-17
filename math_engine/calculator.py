@@ -20,7 +20,7 @@ from .utility import boolean, isDecimal, get_line_number, isInt, isfloat, isScOp
 from . import config_manager as config_manager
 from . import ScientificEngine
 from . import error as E
-from .non_decimal_utility import int_to_value, value_to_int, non_decimal_scan, apply_word_limit, setbit, bitor, bitand, bitnot
+from .non_decimal_utility import int_to_value, value_to_int, non_decimal_scan, apply_word_limit, setbit, bitor, bitand, bitnot, bitxor, shl, shr
 from .AST_Node_Types import Number, BinOp, Variable
 
 # Debug toggle for optional prints in this module
@@ -29,7 +29,7 @@ debug = False
 # Supported operators / functions (kept as simple lists for quick membership checks)
 Operations = ["+", "-", "*", "/", "=", "^", ">>", "<<", "<", ">", "|","&" ]
 Science_Operations = ["sin", "cos", "tan", "10^x", "log", "e^", "π", "√"]
-Bit_Operations = ["setbit", "bitnot", "bitand", "bitor"]
+Bit_Operations = ["setbit", "bitxor", "shl", "shr", "bitnot", "bitand", "bitor"]
 
 # Global Decimal precision used by this module (UI may also enforce this before calls)
 getcontext().prec = 10000
@@ -54,7 +54,10 @@ RAW_FUNCTION_MAP = {
     "setbit(":"setbit",
     "bitnot(":"bitnot",
     "bitand(":"bitand",
-    "bitor(":"bitor"
+    "bitor(":"bitor",
+    "bitxor(": "bitxor",
+    "shl(": "shl",
+    "shr(": "shr",
 }
 FUNCTION_STARTS_OPTIMIZED = {
     start_str: (token, len(start_str))
@@ -490,6 +493,69 @@ def ast(received_string, settings, custom_variables):
                 except Exception as e:
                     raise E.SyntaxError(f"Error in {token} operation: {e}", code="8007")
 
+            elif token == 'bitxor':
+                if not tokens or tokens.pop(0) != ',':
+                    raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
+
+                base_subtree = parse_bor(tokens)
+
+                if not tokens or tokens.pop(0) != ')':
+                    raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
+
+                argument_value = argument_subtree.evaluate()
+                base_value = base_subtree.evaluate()
+                if argument_value % 1 != 0 or base_value % 1 != 0:
+                    raise E.CalculationError("Bit functions require integer values.", code="3041")
+
+                try:
+                    result_string = bitxor(argument_value, base_value)
+                    calculated_value = result_string
+                    return Number(calculated_value)
+                except Exception as e:
+                    raise E.SyntaxError(f"Error in {token} operation: {e}", code="8007")
+
+            elif token == 'shl':
+                if not tokens or tokens.pop(0) != ',':
+                    raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
+
+                base_subtree = parse_bor(tokens)
+
+                if not tokens or tokens.pop(0) != ')':
+                    raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
+
+                argument_value = argument_subtree.evaluate()
+                base_value = base_subtree.evaluate()
+                if argument_value % 1 != 0 or base_value % 1 != 0:
+                    raise E.CalculationError("Bit functions require integer values.", code="3041")
+
+                try:
+                    result_string = shl(argument_value, base_value)
+                    calculated_value = result_string
+                    return Number(calculated_value)
+                except Exception as e:
+                    raise E.SyntaxError(f"Error in {token} operation: {e}", code="8007")
+
+            elif token == 'shr':
+                if not tokens or tokens.pop(0) != ',':
+                    raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
+
+                base_subtree = parse_bor(tokens)
+
+                if not tokens or tokens.pop(0) != ')':
+                    raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
+
+                argument_value = argument_subtree.evaluate()
+                base_value = base_subtree.evaluate()
+                if argument_value % 1 != 0 or base_value % 1 != 0:
+                    raise E.CalculationError("Bit functions require integer values.", code="3041")
+
+                try:
+                    result_string = shr(argument_value, base_value)
+                    calculated_value = result_string
+                    return Number(calculated_value)
+                except Exception as e:
+                    raise E.SyntaxError(f"Error in {token} operation: {e}", code="8007")
+
             elif token == 'bitand':
                 if not tokens or tokens.pop(0) != ',':
                     raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
@@ -526,8 +592,6 @@ def ast(received_string, settings, custom_variables):
                     raise E.CalculationError("Bit functions require integer values.", code="3041")
 
                 try:
-                    print(argument_value)
-                    print(base_value)
                     result_string = bitor(argument_value, base_value)
                     calculated_value = result_string
                     return Number(calculated_value)

@@ -204,3 +204,21 @@ def bitor(value1, value2):
         raise E.CalculationError("Failed bitor Operation", code="8015")
 
     return Decimal(result_int)
+
+def bitxor(value1, value2):
+    value1 = int(value1)
+    value2 = int(value2)
+    return Decimal(value1 ^ value2)
+
+
+def shl(value1, value2):
+    value1 = int(value1)
+    value2 = int(value2)
+    return Decimal(value1 << value2)
+
+
+def shr(value1, value2):
+    value1 = int(value1)
+    value2 = int(value2)
+    return Decimal(value1 >> value2)
+
