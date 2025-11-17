@@ -29,7 +29,11 @@ def fresh_preset():
     math_engine.config_manager.reset_settings()
     settings = math_engine.config_manager.load_setting_value("all")
     return settings
-
+def load_defaults(**overrides):
+    """Hilfsfunktion: Default-Settings + optionale Overrides laden."""
+    settings = DEFAULT_SETTINGS.copy()
+    settings.update(overrides)
+    math_engine.load_preset(settings)
 
 # ---------------------------------------------------------------------------
 # 1) Grundrechenarten & Präzedenz
@@ -689,7 +693,171 @@ def test_augmented_assignment_not_allowed_in_solver():
         math_engine.evaluate("x += 5")
     assert exc.value.code == "3030"
 
+# ---------------------------------------------------------------------------
+# 20) Bit
+# ---------------------------------------------------------------------------
+def test_bitand_basic():
+    assert math_engine.evaluate("int:bitand(0b1100, 0b1010)") == 0b1000
 
+def test_bitxor_basic():
+    assert math_engine.evaluate("int:bitxor(0b1010, 0b0110)") == 0b1100
+
+def test_shl_basic():
+    assert math_engine.evaluate("int:shl(1, 3)") == 8
+
+def test_shr_basic():
+    load_defaults()
+    result = math_engine.evaluate("shr(0b100000, 3)")
+    # 0b100000 (32) >> 3 = 0b00100 (4)
+    assert result == Decimal(4)
+
+
+def test_setbit_basic():
+    assert math_engine.evaluate("int:setbit(0, 3)") == 8
+# --- setbit ---------------------------------------------------------------
+
+def test_setbit_basic_binary():
+    load_defaults()
+    result = math_engine.evaluate("setbit(0b0000, 2)")
+    # 0b0000 -> Bit 2 setzen -> 0b0100 = 4
+    assert result == Decimal(4)
+
+
+def test_setbit_basic_hex():
+    load_defaults()
+    result = math_engine.evaluate("setbit(0x0, 3)")
+    # 0x0 -> Bit 3 setzen -> 0b1000 = 8
+    assert result == Decimal(8)
+
+
+def test_setbit_requires_integer_arguments():
+    load_defaults()
+    with pytest.raises(E.CalculationError) as exc:
+        math_engine.evaluate("setbit(1.5, 1)")
+    assert exc.value.code == "3041"
+
+
+# --- clrbit ---------------------------------------------------------------
+
+def test_clrbit_basic():
+    load_defaults()
+    result = math_engine.evaluate("clrbit(0b1111, 1)")
+    # 0b1111 -> Bit 1 löschen -> 0b1101 = 13
+    assert result == Decimal(13)
+
+
+# --- togbit ---------------------------------------------------------------
+
+def test_togbit_basic():
+    load_defaults()
+    result = math_engine.evaluate("togbit(0b1010, 1)")
+    # 0b1010 -> Bit 1 togglen -> 0b1000 = 8
+    assert result == Decimal(8)
+
+
+# --- bitand / bitor / bitxor ---------------------------------------------
+
+def test_bitand_basic():
+    load_defaults()
+    result = math_engine.evaluate("bitand(0b1101, 0b1011)")
+    # 1101 & 1011 = 1001 = 9
+    assert result == Decimal(9)
+
+
+def test_bitor_basic():
+    load_defaults()
+    result = math_engine.evaluate("bitor(0b0011, 0b0101)")
+    # 0011 | 0101 = 0111 = 7
+    assert result == Decimal(7)
+
+
+def test_bitxor_basic():
+    load_defaults()
+    result = math_engine.evaluate("bitxor(0b1100, 0b1010)")
+    # 1100 ^ 1010 = 0110 = 6
+    assert result == Decimal(6)
+
+
+def test_bitops_mixed_bases():
+    load_defaults()
+    result = math_engine.evaluate("bitand(0xF0, 0b11110000)")
+    assert result == Decimal(240)
+
+
+# --- shl / shr ------------------------------------------------------------
+
+def test_shl_basic():
+    load_defaults()
+    result = math_engine.evaluate("shl(3, 4)")
+    # 3 << 4 = 48
+    assert result == Decimal(48)
+
+
+def test_shr_basic():
+    load_defaults()
+    result = math_engine.evaluate("shr(0b100000, 3)")
+    # 0b100000 (32) >> 3 = 0b1000 (4)
+    assert result == Decimal(4)
+
+
+def test_shift_requires_integer_arguments():
+    load_defaults()
+    with pytest.raises(E.CalculationError) as exc:
+        math_engine.evaluate("shl(2.5, 1)")
+    assert exc.value.code == "3041"
+
+
+# --- bitnot ---------------------------------------------------------------
+
+def test_bitnot_zero_default_word_size():
+    # word_size = 0 => Python-Arithmetik, also ~0 = -1
+    load_defaults(word_size=0)
+    result = math_engine.evaluate("bitnot(0)")
+    assert result == Decimal(-1)
+
+
+
+
+
+# --- testbit --------------------------------------------------------------
+
+def test_testbit_true():
+
+    # 0b1010 -> Bit 3 (0b1000) ist 1
+    result = math_engine.evaluate("bool:testbit(0b1010, 3)")
+    assert result is True
+
+
+def test_testbit_false():
+
+    # 0b1010 -> Bit 0 ist 0
+    result = math_engine.evaluate("bool:testbit(0b1010, 0)")
+    assert result is False
+
+
+def test_testbit_requires_integer_arguments():
+    with pytest.raises(E.CalculationError) as exc:
+        math_engine.evaluate("bool:testbit(1.5, 0)")
+    assert exc.value.code == "3041"
+
+
+# --- Kombinierter Integrationstest ---------------------------------------
+
+def test_all_bit_operations_combined_expression():
+    expr = (
+        "int:("
+        "bitand(0b1101,0b1011) + "
+        "bitor(0b0011,0b0101) + "
+        "bitxor(0xF0,0b1010) + "
+        "shl(3,4) + "
+        "shr(0b100000,3) + "
+        "setbit(0b0001,2) + "
+        "clrbit(0b1111,1) + "
+        "togbit(0b1010,1)"
+        ")"
+    )
+    result = math_engine.evaluate(expr)
+    assert result == 344
 
 def test_reset():
     math_engine.config_manager.reset_settings()

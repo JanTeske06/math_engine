@@ -222,3 +222,19 @@ def shr(value1, value2):
     value2 = int(value2)
     return Decimal(value1 >> value2)
 
+def clrbit(value1, value2):
+    value1 = int(value1)
+    value2 = int(value2)
+    return value1 & ~(1 << value2)
+
+def togbit(value1, value2):
+    value1 = int(value1)
+    value2 = int(value2)
+    return value1 ^ (1 << value2)
+
+def testbit(value1, value2):
+    value1 = int(value1)
+    value2 = int(value2)
+    return (value1 & (1 << value2)) != 0
+
+

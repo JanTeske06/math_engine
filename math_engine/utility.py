@@ -8,14 +8,14 @@ from . import error as E
 def boolean(value):
     if isinstance(value, bool):
         return value
-    if isinstance(value, str):
+    if isinstance(value, (str, Decimal, int)):
         if value == "True":
             return True
         elif value == "False":
             return False
-        elif value == "1":
+        elif value == "1" or int(value) == 1:
             return True
-        elif value == "0":
+        elif value == "0"or int(value) == 1:
             return False
         raise E.ConversionError("Couldnt convert type to bool", code="8003")
     raise E.ConversionError("Couldnt convert type to bool", code="8003")

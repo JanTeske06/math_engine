@@ -20,7 +20,7 @@ from .utility import boolean, isDecimal, get_line_number, isInt, isfloat, isScOp
 from . import config_manager as config_manager
 from . import ScientificEngine
 from . import error as E
-from .non_decimal_utility import int_to_value, value_to_int, non_decimal_scan, apply_word_limit, setbit, bitor, bitand, bitnot, bitxor, shl, shr
+from .non_decimal_utility import int_to_value, value_to_int, non_decimal_scan, apply_word_limit, setbit, bitor, bitand, bitnot, bitxor, shl, shr, clrbit, togbit, testbit
 from .AST_Node_Types import Number, BinOp, Variable
 
 # Debug toggle for optional prints in this module
@@ -29,7 +29,7 @@ debug = False
 # Supported operators / functions (kept as simple lists for quick membership checks)
 Operations = ["+", "-", "*", "/", "=", "^", ">>", "<<", "<", ">", "|","&" ]
 Science_Operations = ["sin", "cos", "tan", "10^x", "log", "e^", "π", "√"]
-Bit_Operations = ["setbit", "bitxor", "shl", "shr", "bitnot", "bitand", "bitor"]
+Bit_Operations = ["setbit", "bitxor", "shl", "shr", "bitnot", "bitand", "bitor", "clrbit", "togbit", "testbit"]
 
 # Global Decimal precision used by this module (UI may also enforce this before calls)
 getcontext().prec = 10000
@@ -58,6 +58,9 @@ RAW_FUNCTION_MAP = {
     "bitxor(": "bitxor",
     "shl(": "shl",
     "shr(": "shr",
+    "clrbit(": "clrbit",
+    "togbit(" : "togbit",
+    "testbit(": "testbit"
 }
 FUNCTION_STARTS_OPTIMIZED = {
     start_str: (token, len(start_str))
@@ -510,6 +513,69 @@ def ast(received_string, settings, custom_variables):
                 try:
                     result_string = bitxor(argument_value, base_value)
                     calculated_value = result_string
+                    return Number(calculated_value)
+                except Exception as e:
+                    raise E.SyntaxError(f"Error in {token} operation: {e}", code="8007")
+
+            elif token == 'clrbit':
+                if not tokens or tokens.pop(0) != ',':
+                    raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
+
+                base_subtree = parse_bor(tokens)
+
+                if not tokens or tokens.pop(0) != ')':
+                    raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
+
+                argument_value = argument_subtree.evaluate()
+                base_value = base_subtree.evaluate()
+                if argument_value % 1 != 0 or base_value % 1 != 0:
+                    raise E.CalculationError("Bit functions require integer values.", code="3041")
+
+                try:
+                    result_string = clrbit(argument_value, base_value)
+                    calculated_value = result_string
+                    return Number(calculated_value)
+                except Exception as e:
+                    raise E.SyntaxError(f"Error in {token} operation: {e}", code="8007")
+
+            elif token == 'togbit':
+                if not tokens or tokens.pop(0) != ',':
+                    raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
+
+                base_subtree = parse_bor(tokens)
+
+                if not tokens or tokens.pop(0) != ')':
+                    raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
+
+                argument_value = argument_subtree.evaluate()
+                base_value = base_subtree.evaluate()
+                if argument_value % 1 != 0 or base_value % 1 != 0:
+                    raise E.CalculationError("Bit functions require integer values.", code="3041")
+
+                try:
+                    result_string = togbit(argument_value, base_value)
+                    calculated_value = result_string
+                    return Number(calculated_value)
+                except Exception as e:
+                    raise E.SyntaxError(f"Error in {token} operation: {e}", code="8007")
+
+            elif token == 'testbit':
+                if not tokens or tokens.pop(0) != ',':
+                    raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
+
+                base_subtree = parse_bor(tokens)
+
+                if not tokens or tokens.pop(0) != ')':
+                    raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
+
+                argument_value = argument_subtree.evaluate()
+                base_value = base_subtree.evaluate()
+                if argument_value % 1 != 0 or base_value % 1 != 0:
+                    raise E.CalculationError("Bit functions require integer values.", code="3041")
+
+                try:
+                    result_bool = testbit(argument_value, base_value)
+                    calculated_value = 1 if result_bool else 0
                     return Number(calculated_value)
                 except Exception as e:
                     raise E.SyntaxError(f"Error in {token} operation: {e}", code="8007")
