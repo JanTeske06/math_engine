@@ -49,7 +49,8 @@ def non_decimal_scan(problem: str, b: int, settings: dict):
             if char_a in allowed_char:
                 value_prefix += char_a
             elif char_a in forbidden_char:
-                raise E.ConversionError(f"Unexpected token in {prefix_name}: {char_a}", code="8004", position=a)
+                #raise E.ConversionError(f"Unexpected token in {prefix_name}: {char_a}", code="8004", position=a)
+                break
             elif char_a in Operations or char_a == " " or char_a in "()":
                 # Ende der Zahl erreicht
                 break
