@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "math-engine"
-version = "0.3.2"
+version = "0.4.0"
 authors = [
   { name="Jan Teske", email="jan.teske.06@gmail.com" },
 ]
@@ -27,6 +27,7 @@ calc = "math_engine.cli:main"
 [project.urls]
 Homepage = "https://github.com/JanTeske06/math_engine"
 Source = "https://github.com/JanTeske06/math_engine"
+Changelog = "https://github.com/JanTeske06/math_engine/blob/master/CHANGELOG.md"  # <-- NEU
 
 [tool.setuptools]
 include-package-data = true

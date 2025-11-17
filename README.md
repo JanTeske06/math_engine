@@ -1,5 +1,5 @@
 
-# Math Engine 0.3.2
+# Math Engine 0.4.0
 
 [![PyPI Version](https://img.shields.io/pypi/v/math-engine.svg)](https://pypi.org/project/math-engine/)
 [![License: MIT](https://img.shields.io/pypi/l/math-engine.svg)](https://opensource.org/licenses/MIT)
@@ -19,7 +19,7 @@ It provides a complete pipeline:
 * Scientific functions
 * Strict error codes for reliable debugging and automated testing
 
-**Version _0.3.2_** adds extensive non-decimal number support (hex, binary, octal), prefix-based type casting, improved settings management, expanded error reporting, and an optional programmer mode with bitwise operations and word-size simulation.
+**Version 0.4.0** introduces a powerful **Command Line Interface (CLI)**
 
 This library is ideal for:
 
@@ -48,7 +48,7 @@ This library is ideal for:
   * `only_binary`
   * `only_octal`
 
-### Non-Decimal Support (≥ 0.2.1)
+### Non-Decimal Support
 
 * Read binary `0b1101`
 * Read octal `0o755`
@@ -65,7 +65,49 @@ This library is ideal for:
 pip install math-engine
 ````
 
----
+-----
+
+# Command Line Interface (CLI)
+
+Math Engine works directly from your terminal\! After installing via pip, you can use the command `math-engine` (or the short alias `calc`).
+
+### 1\. Interactive Mode (REPL)
+
+Start the shell to calculate, manage variables, and change settings dynamically.
+
+```bash
+$ math-engine
+
+Math Engine 0.4.0 Interactive Shell
+Type 'help' for commands, 'exit' to leave.
+----------------------------------------
+Examples:
+  >>> 3 + 3 * 4 
+  15
+  
+  >>> hex: 255
+  0xff
+  
+  >>> x + 5, x=10    (Inline Variables)
+  15
+  
+  >>> set setting word_size 8
+  Setting updated: word_size -> 8
+```
+
+### 2\. Direct Calculation
+
+You can also pass expressions directly (great for scripting):
+
+```bash
+$ math-engine "3 + 3"
+6
+
+$ math-engine "hex: 255"
+0xff
+```
+
+-----
 
 # Quick Start
 
@@ -109,17 +151,16 @@ math_engine.evaluate("bool: 3+3=6")
 ```python
 import math_engine
 
-reset_settings()
+math_engine.reset_settings()
 ```
 
+If a requested output type does not match the actual result, `correct_output_format=True` allows math\_engine to fall back to a compatible type instead of raising an error.
 
-If a requested output type does not match the actual result, `correct_output_format=True` allows math_engine to fall back to a compatible type instead of raising an error.
-
----
+-----
 
 # Prefix System (Casting Syntax)
 
-math_engine supports a powerful prefix-based casting system:
+math\_engine supports a powerful prefix-based casting system:
 
 | Prefix   | Meaning     | Example                            |
 | -------- | ----------- | ---------------------------------- |
@@ -139,7 +180,7 @@ math_engine.evaluate("hex: 3 + 3")
 # '0x6'
 ```
 
----
+-----
 
 # Variables
 
@@ -162,7 +203,7 @@ math_engine.evaluate("A + B", A=10, B=5)
 
 Variables are mapped internally to a safe internal representation and are designed to be simple and predictable.
 
----
+-----
 
 # Scientific Functions
 
@@ -176,7 +217,7 @@ math_engine.evaluate("pi * 2")
 
 All functions are processed by the internal `ScientificEngine`, honoring your settings (for example, `use_degrees`).
 
----
+-----
 
 # Linear Equation Solver
 
@@ -187,11 +228,11 @@ math_engine.evaluate("x + 3 = 10")
 
 Invalid or nonlinear equations produce errors with codes like:
 
-* 3005 – Non-linear equation
-* 3002 – Multiple variables
-* 3022 – One side empty
+  * 3005 – Non-linear equation
+  * 3002 – Multiple variables
+  * 3022 – One side empty
 
----
+-----
 
 # Non-Decimal Numbers (Binary, Octal, Hex)
 
@@ -205,9 +246,9 @@ math_engine.evaluate("0b1010 * 3")
 
 Non-decimal parsing respects the setting `allow_non_decimal`. If it is set to `False`, using `0b`, `0o`, or `0x` will raise a conversion error.
 
----
+-----
 
-# Bitwise Operations & Developer Mode (v0.3.x)
+# Bitwise Operations & Developer Mode (v0.4.0)
 
 Math Engine can act as a **programmer's calculator**. It supports standard operator precedence and bitwise logic.
 
@@ -228,15 +269,15 @@ Math Engine can act as a **programmer's calculator**. It supports standard opera
 
 You can simulate hardware constraints (like C++ `int8`, `uint16`, etc.) by setting a `word_size`.
 
-* **`word_size: 0` (Default):** Python mode (arbitrary precision, no overflow).
-* **`word_size: 8/16/32/64`:** Enforces bit limits. Numbers will wrap around (overflow) accordingly.
+  * **`word_size: 0` (Default):** Python mode (arbitrary precision, no overflow).
+  * **`word_size: 8/16/32/64`:** Enforces bit limits. Numbers will wrap around (overflow) accordingly.
 
 ### Signed vs. Unsigned Mode
 
 When `word_size > 0`, you can control how values are interpreted via `signed_mode`:
 
-* **`True` (Default):** Use **Two's Complement** for negative values.
-* **`False`:** Treat all values as unsigned.
+  * **`True` (Default):** Use **Two's Complement** for negative values.
+  * **`False`:** Treat all values as unsigned.
 
 **Example: 8-bit Simulation**
 
@@ -273,7 +314,7 @@ math_engine.evaluate("FF + 3")
 
 Input validation ensures safety and prevents mixing incompatible formats in strict modes.
 
----
+-----
 
 # Settings System
 
@@ -325,16 +366,16 @@ You can also read a single setting:
 decimal_places = math_engine.load_one_setting("decimal_places")
 ```
 
----
+-----
 
 # Error Handling
 
 Every error is a custom exception with:
 
-* Human-readable message
-* Machine-readable error code
-* Position (if applicable)
-* The original expression
+  * Human-readable message
+  * Machine-readable error code
+  * Position (if applicable)
+  * The original expression
 
 Example:
 
@@ -363,17 +404,16 @@ except E.CalculationError as e:
 
 For a complete list of all error codes and their meanings, please see the **[Error Codes Reference](https://github.com/JanTeske06/math_engine/blob/master/ERRORS.md)**.
 
----
----
+-----
 
 # Testing and Reliability
 
-math_engine is designed with testing in mind:
+math\_engine is designed with testing in mind:
 
-* Full error-code consistency
-* Strict syntax rules
-* Unit-test friendly behavior
-* No reliance on Python’s runtime execution
+  * Full error-code consistency
+  * Strict syntax rules
+  * Unit-test friendly behavior
+  * No reliance on Python’s runtime execution
 
 Example with `pytest`:
 
@@ -390,22 +430,22 @@ def test_division_by_zero_error_code():
 
 You can also test more advanced behavior (non-decimal, strict modes, bitwise operations, etc.) in the same way.
 
----
+-----
 
 # Performance
 
-* No use of Python `eval()`
-* Predictable performance through AST evaluation
-* Optimized tokenization
-* Fast conversion of non-decimal numbers
+  * No use of Python `eval()`
+  * Predictable performance through AST evaluation
+  * Optimized tokenization
+  * Fast conversion of non-decimal numbers
 
 Future updates focus on:
 
-* Expression caching
-* Compiler-like optimizations
-* Faster scientific evaluation
+  * Expression caching
+  * Compiler-like optimizations
+  * Faster scientific evaluation
 
----
+-----
 
 # Use Cases
 
@@ -429,32 +469,38 @@ Rejects arbitrary Python code and ensures controlled evaluation.
 
 Conversion between hex/bin/decimal is easy and reliable.
 
----
+-----
 
 # Roadmap (Future Versions)
 
-* Non-decimal output formatting upgrades
-* Strict type-matching modes
-* Function overloading
-* Memory/register system
-* Speed optimization via caching
-* User-defined functions
-* Expression pre-compilation
-* Better debugging output
+  * Non-decimal output formatting upgrades
+  * Strict type-matching modes
+  * Function overloading
+  * Memory/register system
+  * Speed optimization via caching
+  * User-defined functions
+  * Expression pre-compilation
+  * Better debugging output
 
----
+-----
+
+# Changelog
+
+See [CHANGELOG.md](https://github.com/JanTeske06/math_engine/blob/master/CHANGELOG.md) for details.
+
+-----
 
 # License
+[MIT License](https://github.com/JanTeske06/math_engine/blob/master/LICENSE)
 
-MIT License
-
----
+-----
 
 # Contributing
 
 Contributions are welcome.
 Feel free to submit issues or PRs on GitHub:
 
-```text
-https://github.com/JanTeske06/math_engine
-```
+[https://github.com/JanTeske06/math\_engine](https://github.com/JanTeske06/math_engine)
+
+---
+
