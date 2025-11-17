@@ -146,3 +146,60 @@ def apply_word_limit(value,settings:dict):
             return Decimal(val_int)
         except Exception as e:
             raise E.ConversionError("Error converting value into int.", code ="5004")
+
+
+def setbit(value, pos):
+    try:
+        val_int = int(value)
+        pos_int = int(pos)
+    except Exception as e:
+        raise E.ConversionError("Input could not be converted to a Python integer.", code = "8004")
+    try:
+        result_int = val_int | (1 << pos_int)
+    except Exception as e:
+        raise E.CalculationError("Failed setbit Operation", code = "8007")
+    return Decimal(result_int)
+
+
+def bitnot(value):
+    try:
+        val_int = int(value)
+    except Exception as e:
+        raise E.ConversionError("Input could not be converted to a Python integer for bitnot.", code="8010")
+
+    try:
+        result_int = ~val_int
+    except Exception as e:
+        raise E.CalculationError("Failed bitnot Operation", code="8011")
+
+    return Decimal(result_int)
+
+
+def bitand(value1, value2):
+    try:
+        val1_int = int(value1)
+        val2_int = int(value2)
+    except Exception as e:
+        raise E.ConversionError("Input could not be converted to a Python integer for bitand.", code="8012")
+
+    try:
+        result_int = val1_int & val2_int
+    except Exception as e:
+        raise E.CalculationError("Failed bitand Operation", code="8013")
+
+    return Decimal(result_int)
+
+
+def bitor(value1, value2):
+    try:
+        val1_int = int(value1)
+        val2_int = int(value2)
+    except Exception as e:
+        raise E.ConversionError("Input could not be converted to a Python integer for bitor.", code="8014")
+
+    try:
+        result_int = val1_int | val2_int
+    except Exception as e:
+        raise E.CalculationError("Failed bitor Operation", code="8015")
+
+    return Decimal(result_int)

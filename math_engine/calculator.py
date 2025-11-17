@@ -20,7 +20,7 @@ from .utility import boolean, isDecimal, get_line_number, isInt, isfloat, isScOp
 from . import config_manager as config_manager
 from . import ScientificEngine
 from . import error as E
-from .non_decimal_utility import int_to_value, value_to_int, non_decimal_scan, apply_word_limit
+from .non_decimal_utility import int_to_value, value_to_int, non_decimal_scan, apply_word_limit, setbit, bitor, bitand, bitnot
 from .AST_Node_Types import Number, BinOp, Variable
 
 # Debug toggle for optional prints in this module
@@ -29,6 +29,7 @@ debug = False
 # Supported operators / functions (kept as simple lists for quick membership checks)
 Operations = ["+", "-", "*", "/", "=", "^", ">>", "<<", "<", ">", "|","&" ]
 Science_Operations = ["sin", "cos", "tan", "10^x", "log", "e^", "π", "√"]
+Bit_Operations = ["setbit", "bitnot", "bitand", "bitor"]
 
 # Global Decimal precision used by this module (UI may also enforce this before calls)
 getcontext().prec = 10000
@@ -49,7 +50,11 @@ RAW_FUNCTION_MAP = {
     "sqrt(": "√",
     "pi" : "π",
     "PI" : "π",
-    "Pi" : "π"
+    "Pi" : "π",
+    "setbit(":"setbit",
+    "bitnot(":"bitnot",
+    "bitand(":"bitand",
+    "bitor(":"bitor"
 }
 FUNCTION_STARTS_OPTIMIZED = {
     start_str: (token, len(start_str))
@@ -429,6 +434,7 @@ def ast(received_string, settings, custom_variables):
 
                 argument_subtree = parse_bor(tokens)
 
+
                 # Special case: log(number, base)
                 if token == 'log' and tokens and tokens[0] == ',':
                     tokens.pop(0)
@@ -439,21 +445,129 @@ def ast(received_string, settings, custom_variables):
                     base_value = base_subtree.evaluate()
                     ScienceOp = f"{token}({argument_value},{base_value})"
                 else:
-                    if not tokens or tokens.pop(0) != ')':
-                        raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code="3009")
-                    argument_value = argument_subtree.evaluate()
-                    ScienceOp = f"{token}({argument_value})"
+                        if not tokens or tokens.pop(0) != ')':
+                            raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code="3009")
+                        argument_value = argument_subtree.evaluate()
+                        ScienceOp = f"{token}({argument_value})"
 
                 # Delegate to scientific engine; keep result as-is for Number()
-                result_string = ScientificEngine.unknown_function(ScienceOp)
-                if isinstance(result_string, str) and result_string.startswith("ERROR:"):
-                    # Wenn ScientificEngine einen Fehler meldet, werfe ihn als SyntaxError
-                    raise E.SyntaxError(result_string, code="3218")
+                if token not in Bit_Operations:
+                    result_string = ScientificEngine.unknown_function(ScienceOp)
+                    if isinstance(result_string, str) and result_string.startswith("ERROR:"):
+                        # Wenn ScientificEngine einen Fehler meldet, werfe ihn als SyntaxError
+                        raise E.SyntaxError(result_string, code="3218")
+                    try:
+                        calculated_value = result_string
+                        return Number(calculated_value)
+                    except ValueError:
+                        raise E.SyntaxError(f"Error in scientific function: {result_string}", code="3218")
+
+
+        elif token in Bit_Operations:
+
+            if not tokens or tokens.pop(0) != '(':
+                raise E.SyntaxError(f"Missing opening parenthesis after bit function {token}", code="3010")
+
+            argument_subtree = parse_bor(tokens)
+            if token == 'setbit':
+                if not tokens or tokens.pop(0) != ',':
+                    raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
+
+                base_subtree = parse_bor(tokens)
+
+                if not tokens or tokens.pop(0) != ')':
+                    raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
+
+                argument_value = argument_subtree.evaluate()
+                base_value = base_subtree.evaluate()
+                if argument_value % 1 != 0 or base_value % 1 != 0:
+                    raise E.CalculationError("Bit functions require integer values.", code="3041")
+
                 try:
+                    result_string = setbit(argument_value, base_value)
                     calculated_value = result_string
                     return Number(calculated_value)
-                except ValueError:
-                    raise E.SyntaxError(f"Error in scientific function: {result_string}", code="3218")
+                except Exception as e:
+                    raise E.SyntaxError(f"Error in {token} operation: {e}", code="8007")
+
+            elif token == 'bitand':
+                if not tokens or tokens.pop(0) != ',':
+                    raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
+
+                base_subtree = parse_bor(tokens)
+
+                if not tokens or tokens.pop(0) != ')':
+                    raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
+
+                argument_value = argument_subtree.evaluate()
+                base_value = base_subtree.evaluate()
+                if argument_value % 1 != 0 or base_value % 1 != 0:
+                    raise E.CalculationError("Bit functions require integer values.", code="3041")
+
+                try:
+                    result_string = bitand(argument_value, base_value)
+                    calculated_value = result_string
+                    return Number(calculated_value)
+                except Exception as e:
+                    raise E.SyntaxError(f"Error in {token} operation: {e}", code="8007")
+
+            elif token == 'bitor':
+                if not tokens or tokens.pop(0) != ',':
+                    raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
+
+                base_subtree = parse_bor(tokens)
+
+                if not tokens or tokens.pop(0) != ')':
+                    raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
+
+                argument_value = argument_subtree.evaluate()
+                base_value = base_subtree.evaluate()
+                if argument_value % 1 != 0 or base_value % 1 != 0:
+                    raise E.CalculationError("Bit functions require integer values.", code="3041")
+
+                try:
+                    print(argument_value)
+                    print(base_value)
+                    result_string = bitor(argument_value, base_value)
+                    calculated_value = result_string
+                    return Number(calculated_value)
+                except Exception as e:
+                    raise E.SyntaxError(f"Error in {token} operation: {e}", code="8007")
+
+            elif token == "bitnot":
+                next_char = -1
+                if tokens:
+                    next_char = tokens[0]
+                if next_char == ',':
+                    raise E.SyntaxError(f"Comma in'{token}'", code="3009")
+                if not tokens or tokens.pop(0) != ')':
+                    raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code="3009")
+                argument_value = argument_subtree.evaluate()
+                if argument_value % 1 != 0:
+                    raise E.CalculationError("Bit functions require integer values.", code="3041")
+
+                try:
+                    result_string = bitnot(argument_value)
+                    calculated_value = result_string
+                    return Number(calculated_value)
+                except Exception as e:
+                    raise E.SyntaxError(f"Error in {token} operation: {e}", code="8007")
+
+            else:
+                if not tokens or tokens.pop(0) != ')':
+                    raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code="3009")
+
+                argument_value = argument_subtree.evaluate()
+                try:
+                    raise NotImplementedError("Bitte implementiere die Ausführung für Bit-Operationen wie bitnot.")
+
+                    calculated_value = result_string
+                    return Number(calculated_value)
+
+                except Exception as e:
+                    raise E.SyntaxError(f"Error in bit operation '{token}': {e}", code="8008")
+
+
 
         # Literals / variables
         elif isinstance(token, Decimal):

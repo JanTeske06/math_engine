@@ -152,6 +152,8 @@ ERROR_MESSAGES = {
     "8004" : "Input could not be converted to a Python integer.",
     "8005" : "Forbidden value in Hex", # + value
     "8006" : "Result value not compatible with output prefix",
+    "8007": "Failed Bit Operation",
+    "8008": "Comma in BitNot",
 
     # 9xxx — catch-all
     "9999": "Unexpected Error: ",                # + error
