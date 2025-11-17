@@ -118,7 +118,7 @@ def validate(expr: str,
 
 
 #
-if __name__ == '__main__':
-    #problem = ("x+1", x=5)
-    print(math_engine.evaluate("x += 5", x=10))
-    config_manager.reset_settings()
+# if __name__ == '__main__':
+#     #problem = ("x+1", x=5)
+#     print(math_engine.evaluate("x += 5", x=10))
+#     config_manager.reset_settings()
