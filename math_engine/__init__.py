@@ -8,7 +8,7 @@ from . import error as E
 from typing import Any, Mapping, Optional
 from typing import Union
 from typing import Any, Mapping
-
+__version__ = "0.3.2"
 memory = {}
 
 def set_memory(key_value: str, value:str):
@@ -119,7 +119,7 @@ def validate(expr: str,
 def reset_settings():
     config_manager.reset_settings()
 #
-# if __name__ == '__main__':
-#     #problem = ("x+1", x=5)
-#     print(math_engine.evaluate("x += 5", x=10))
-#     config_manager.reset_settings()
+if __name__ == '__main__':
+    #problem = ("x+1", x=5)
+    print(math_engine.evaluate("x += 5", x=10))
+    config_manager.reset_settings()
