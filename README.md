@@ -339,7 +339,6 @@ All bitwise functions:
 - support overflow/wrap-around behavior  
 - fully support binary, hex, decimal, and octal inputs  
 - participate in the AST just like standard operators  
-- support underscores in non-decimal literals (`0b1111_0000`)  
 
 This makes Math Engine behave like a full-featured programmer’s calculator with CPU-like precision control.
 
