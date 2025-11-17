@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.3.0] - 2025-11-17
+## [0.3.0] - 2025-11-16
 
 ### Breaking Changes
 - **Operator Redefinition:** The caret symbol `^` is now strictly defined as **Bitwise XOR**. Exponentiation must be performed using `**`.
