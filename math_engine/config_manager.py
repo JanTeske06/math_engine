@@ -211,6 +211,13 @@ def save_setting(key_value, new_value):
     elif key_value == "only_octal":
         settings["only_binary"] = False
         settings["only_hex"] = False
+
+
+    if key_value == "word_size":
+        if new_value not in [0,8,16,32,64]:
+            pass
+        else:
+            raise E.ConfigError(f"Invalid word_size value '{new_value}'", code = "5003")
     try:
         # Use the correct file path (config_json) and dictionary (settings)
         with open(config_json, 'w', encoding='utf-8') as f:

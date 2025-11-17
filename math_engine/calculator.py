@@ -212,7 +212,7 @@ class BinOp:
             return Decimal(int(left_value) >> int(right_value))
         elif self.operator == '*':
             return left_value * right_value
-        elif self.operator == '^':
+        elif self.operator == '**':
             return left_value ** right_value
         elif self.operator == '/':
             if right_value == 0:
@@ -277,7 +277,7 @@ class BinOp:
                 result_constant = left_constant / right_constant
                 return (result_factor, result_constant)
 
-        elif self.operator == '^':
+        elif self.operator == '**':
             # Powers generate non-linear terms (e.g., x^2)
             raise E.SolverError("Powers are not supported by the linear solver.", code="3007")
 
@@ -502,7 +502,10 @@ def translator(problem, custom_variables, settings):
 
         # --- Operators ---
         elif isOp(current_char) != -1:
-            if current_char != "<" and current_char != ">":
+            if current_char == "*" and b + 1 < len(problem) and problem[b + 1] == "*":
+                full_problem.append("**")
+                b += 1
+            elif current_char != "<" and current_char != ">":
                 full_problem.append(current_char)
             elif current_char == "<" and b<= len(problem)+1:
                 if problem[b+1] == "<":
@@ -808,7 +811,7 @@ def ast(received_string, settings, custom_variables):
     def parse_power(tokens):
         """Exponentiation '^' (handled before * and +)."""
         current_subtree = parse_factor(tokens)
-        while tokens and tokens[0] in ("^"):
+        while tokens and (tokens[0] == "**"):
             operator = tokens.pop(0)
             right_part = parse_unary(tokens)
             if not isinstance(current_subtree, Variable) and not isinstance(right_part, Variable):

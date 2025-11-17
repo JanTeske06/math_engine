@@ -120,5 +120,5 @@ def validate(expr: str,
 #
 if __name__ == '__main__':
     #problem = ("x+1", x=5)
-    change_setting("debug", False)
-    print(math_engine.evaluate("hex:1 << 2 + 3"))
+    change_setting("debug", True)
+    print(math_engine.evaluate("3**3**3"))

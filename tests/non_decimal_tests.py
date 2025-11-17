@@ -9,8 +9,7 @@ from math_engine import error as E
 # Fixtures & Basis-Settings
 # ---------------------------------------------------------------------------
 
-DEFAULT_SETTINGS = {
-    "decimal_places": 2,
+DEFAULT_SETTINGS = {"decimal_places": 2,
     "use_degrees": False,
     "allow_augmented_assignment": True,
     "fractions": False,
@@ -21,7 +20,8 @@ DEFAULT_SETTINGS = {
     "only_hex": False,
     "only_binary": False,
     "only_octal": False,
-}
+    "signed_mode" : False,
+    "word_size": 0}
 
 
 @pytest.fixture(autouse=True)
@@ -509,17 +509,17 @@ def test_sqrt_alias():
 
 
 def test_reset():
-    x = {
-        "decimal_places": 2,
-        "use_degrees": False,
-        "allow_augmented_assignment": True,
-        "fractions": False,
-        "allow_non_decimal": True,
-        "debug": False,
-        "correct_output_format": True,
-        "default_output_format": "decimal:",
-        "only_hex": False,
-        "only_binary": False,
-        "only_octal": False,
-    }
+    x =     {"decimal_places": 2,
+    "use_degrees": False,
+    "allow_augmented_assignment": True,
+    "fractions": False,
+    "allow_non_decimal": True,
+    "debug": False,
+    "correct_output_format": True,
+    "default_output_format": "decimal:",
+    "only_hex": False,
+    "only_binary": False,
+    "only_octal": False,
+    "signed_mode" : False,
+    "word_size": 0}
     math_engine.config_manager.force_overwrite_settings(x)

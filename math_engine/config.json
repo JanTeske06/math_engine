@@ -4,10 +4,12 @@
     "allow_augmented_assignment": true,
     "fractions": false,
     "allow_non_decimal": true,
-    "debug": false,
+    "debug": true,
     "correct_output_format": true,
     "default_output_format": "decimal:",
     "only_hex": false,
     "only_binary": false,
-    "only_octal": false
+    "only_octal": false,
+    "signed_mode": false,
+    "word_size": 0
 }
