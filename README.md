@@ -1,4 +1,4 @@
-# Math Engine 0.3.0
+# Math Engine 0.3.1
 
 [![PyPI Version](https://img.shields.io/pypi/v/math-engine.svg)](https://pypi.org/project/math-engine/)
 [![License: MIT](https://img.shields.io/pypi/l/math-engine.svg)](https://opensource.org/licenses/MIT)
@@ -378,7 +378,6 @@ Conversion between hex/bin/decimal is easy and reliable.
 * Non-decimal output formatting upgrades
 * Strict type-matching modes
 * Function overloading
-* Bitwise operators (`&`, `|`, `^`, `<<`, `>>`)
 * Memory/register system
 * Speed optimization via caching
 * User-defined functions
