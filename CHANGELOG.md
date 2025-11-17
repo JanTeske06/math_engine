@@ -24,8 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Mixed-Base Support for Bit Operations:**  
   Bit functions now accept operands in any format (binary, hex, octal, decimal), and all inputs are normalized safely before evaluation.
 
-- **Underscore Support in Non-Decimal Literals:**  
-  Numbers such as `0b1111_0000`, `0xFF_FF`, and `0o755_123` are now valid, matching modern Python syntax.
 
 ### Improved
 - **Parser Stability:**  
