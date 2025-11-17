@@ -143,6 +143,7 @@ ERROR_MESSAGES = {
     "5001" : "File not Found.",
     "5002" : "Could not save config file.",
     "5003" : "Invalid word size",
+    "5004" : "Whole numbers needed.",
     
     "8000": "Error converting int to hex.",
     "8001": "Error converting hex to int.",

@@ -4,7 +4,7 @@
     "allow_augmented_assignment": true,
     "fractions": false,
     "allow_non_decimal": true,
-    "debug": true,
+    "debug": false,
     "correct_output_format": true,
     "default_output_format": "decimal:",
     "only_hex": false,

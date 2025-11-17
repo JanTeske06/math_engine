@@ -91,7 +91,7 @@ def reset_settings():
         "allow_augmented_assignment": True,
         "fractions": False,
         "allow_non_decimal": True,
-        "debug": True,
+        "debug": False,
         "correct_output_format": True,
         "default_output_format": "decimal:",
         "only_hex": False,

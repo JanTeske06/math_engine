@@ -26,28 +26,8 @@ DEFAULT_SETTINGS = {"decimal_places": 2,
 
 @pytest.fixture(autouse=True)
 def fresh_preset():
-    """
-    Vor jedem Test:
-    - aktuelle Settings aus dem Paket holen
-    - ggf. ein paar Defaults überschreiben
-    - wieder per load_preset speichern
-    """
-    settings = math_engine.load_all_settings()  # kommt aus deinem __init__.py / config_manager
-    # Falls du bestimmte Standardwerte für Tests erzwingen willst:
-    settings.update({
-        "decimal_places": 2,
-        "use_degrees": False,
-        "allow_augmented_assignment": True,
-        "fractions": False,
-        "allow_non_decimal": True,
-        "debug": False,
-        "correct_output_format": True,
-        "default_output_format": "decimal:",
-        "only_hex": False,
-        "only_binary": False,
-        "only_octal": False,
-    })
-    math_engine.load_preset(settings)
+    math_engine.config_manager.reset_settings()
+    settings = math_engine.config_manager.load_setting_value("all")
     return settings
 
 
@@ -502,24 +482,214 @@ def test_sqrt_alias():
 #     assert exc.value.code == "3010"
 #WIP
 
+# ===========================================================================
+# NEW TESTS
+# ===========================================================================
+
 # ---------------------------------------------------------------------------
-# 13) Debug-Mode Flag (nur grob)
+# 14) Bitwise Operators (Basic)
 # ---------------------------------------------------------------------------
+
+def test_bitwise_and_basic():
+    """Test basic AND operation: 3 (011) & 1 (001) -> 1."""
+    result = math_engine.evaluate("3 & 1")
+    assert result == Decimal("1")
+
+
+def test_bitwise_or_basic():
+    """Test basic OR operation: 1 (001) | 2 (010) -> 3 (011)."""
+    result = math_engine.evaluate("1 | 2")
+    assert result == Decimal("3")
+
+
+def test_bitwise_xor_basic():
+    """Test basic XOR operation: 3 (011) ^ 1 (001) -> 2 (010)."""
+    # ^ is now hardcoded as XOR
+    result = math_engine.evaluate("3 ^ 1")
+    assert result == Decimal("2")
+
+
+def test_bitwise_shift_left():
+    """Test left shift: 1 << 2 -> 4."""
+    result = math_engine.evaluate("1 << 2")
+    assert result == Decimal("4")
+
+
+def test_bitwise_shift_right():
+    """Test right shift: 8 >> 2 -> 2."""
+    result = math_engine.evaluate("8 >> 2")
+    assert result == Decimal("2")
+
+
+def test_bitwise_fails_on_float():
+    """Ensure bitwise ops raise error on floats."""
+    with pytest.raises(E.CalculationError) as exc:
+        math_engine.evaluate("3.5 & 1")
+    assert exc.value.code in ("3041", "3042", "8003")
+
+
+# ---------------------------------------------------------------------------
+# 15) Operator Precedence (Advanced)
+# ---------------------------------------------------------------------------
+
+def test_precedence_plus_vs_shift():
+    """Verify (+) binds stronger than (<<)."""
+    # 1 << 1 + 1  => 1 << 2 => 4
+    result = math_engine.evaluate("1 << 1 + 1")
+    assert result == Decimal("4")
+
+
+def test_precedence_and_vs_or():
+    """Verify (&) binds stronger than (|)."""
+    # 1 | 2 & 0 => 1 | (0) => 1
+    result = math_engine.evaluate("1 | 2 & 0")
+    assert result == Decimal("1")
+
+
+def test_precedence_xor_vs_or():
+    """Verify (^) binds stronger than (|)."""
+    # 1 | 3 ^ 3 => 1 | (0) => 1
+    result = math_engine.evaluate("1 | 3 ^ 3")
+    assert result == Decimal("1")
+
+
+def test_precedence_complex_mixed():
+    """Test full chain: | < ^ < & < << < + < * < **."""
+    # 3 | 2 * 2 ** 3 + 1
+    # 2**3=8 -> 2*8=16 -> 16+1=17 -> 3|17=19
+    result = math_engine.evaluate("3 | 2 * 2 ** 3 + 1")
+    assert result == Decimal("19")
+
+
+# ---------------------------------------------------------------------------
+# 16) Word Size & Signed Mode logic
+# ---------------------------------------------------------------------------
+
+def test_word_size_8bit_signed_overflow():
+    """Test 8-bit signed overflow: 127 + 1 -> -128."""
+    settings = DEFAULT_SETTINGS.copy()
+    settings["word_size"] = 8
+    settings["signed_mode"] = True
+    math_engine.load_preset(settings)
+
+    result = math_engine.evaluate("127 + 1")
+    assert result == Decimal("-128")
+
+
+def test_word_size_8bit_unsigned_underflow():
+    """Test 8-bit unsigned underflow: 5 - 10 -> 251."""
+    settings = DEFAULT_SETTINGS.copy()
+    settings["word_size"] = 8
+    settings["signed_mode"] = False
+    math_engine.load_preset(settings)
+
+    result = math_engine.evaluate("5 - 10")
+    assert result == Decimal("251")
+
+
+def test_word_size_hex_output_negative_signed():
+    """Test hex output for negative numbers in signed mode."""
+    settings = DEFAULT_SETTINGS.copy()
+    settings["word_size"] = 8
+    settings["signed_mode"] = True
+    math_engine.load_preset(settings)
+
+    # -1 mask 255 -> 255 -> signed check -> -1 -> "-0x1"
+    result = math_engine.evaluate("hex: -1")
+    assert result == "-0x1"
+
+
+def test_word_size_hex_output_unsigned():
+    """Test hex output for negative numbers in unsigned mode."""
+    settings = DEFAULT_SETTINGS.copy()
+    settings["word_size"] = 8
+    settings["signed_mode"] = False
+    math_engine.load_preset(settings)
+
+    # -1 mask 255 -> 255 -> "0xff"
+    result = math_engine.evaluate("hex: -1")
+    assert result == "0xff"
+
+
+def test_word_size_16bit_limit():
+    """Test 16-bit overflow limit."""
+    settings = DEFAULT_SETTINGS.copy()
+    settings["word_size"] = 16
+    settings["signed_mode"] = False
+    math_engine.load_preset(settings)
+
+    # 1 << 16 = 65536 -> overflows to 0
+    result = math_engine.evaluate("1 << 16")
+    assert result == Decimal("0")
+
+
+# ---------------------------------------------------------------------------
+# 17) Power (**) vs XOR (^)
+# ---------------------------------------------------------------------------
+
+def test_caret_is_xor_always():
+    """Confirm ^ is treated as XOR."""
+    # 2 ^ 3 => 1
+    result = math_engine.evaluate("2^3")
+    assert result == Decimal("1")
+
+
+def test_double_star_is_power():
+    """Confirm ** is treated as power."""
+    # 2 ** 3 => 8
+    result = math_engine.evaluate("2**3")
+    assert result == Decimal("8")
+
+
+def test_power_right_associativity():
+    """Confirm powers are calculated right-to-left."""
+    # 2 ** 2 ** 3 => 2 ** 8 => 256
+    result = math_engine.evaluate("2 ** 2 ** 3")
+    assert result == Decimal("256")
+
+
+# ---------------------------------------------------------------------------
+# 18) Parsing Deep Dive (Nested Brackets & Formats)
+# ---------------------------------------------------------------------------
+
+def test_deep_nested_brackets_with_bitwise():
+    """Test deep nesting with various bitwise operators."""
+    # (0x10 ^ (0b11 << 1)) -> (16 ^ 6) -> 22
+    result = math_engine.evaluate("(0x10 ^ (0b11 << 1))")
+    assert result == Decimal("22")
+
+
+def test_hex_bin_arithmetic_mix():
+    """Test mixing hex, binary and decimal in one expression."""
+    # 0xFF (255) + 0b10 (2) - 10 = 247 -> 0xF7
+    result = math_engine.evaluate("hex: 0xFF + 0b10 - 10")
+    assert result == "0xf7"
+
+
+def test_operator_at_start_error():
+    """Test invalid syntax starting with operator."""
+    with pytest.raises(E.CalculationError) as exc:
+        math_engine.evaluate("* 5")
+    assert exc.value.code == "3028"
+
+
+# ---------------------------------------------------------------------------
+# 19) Augmented Assignment Logic
+# ---------------------------------------------------------------------------
+
+def test_augmented_assignment_simulation():
+    """Test the implicit rewrite of += without variables."""
+    # 5 += 2 -> 5 = 5 + 2 -> 5 = 7 -> False
+    result = math_engine.evaluate("5 += 2")
+    assert result == Decimal("7")
+
+
+def test_augmented_assignment_not_allowed_in_solver():
+    with pytest.raises(E.CalculationError) as exc:
+        math_engine.evaluate("x += 5")
+    assert exc.value.code == "3030"
 
 
 
 def test_reset():
-    x =     {"decimal_places": 2,
-    "use_degrees": False,
-    "allow_augmented_assignment": True,
-    "fractions": False,
-    "allow_non_decimal": True,
-    "debug": False,
-    "correct_output_format": True,
-    "default_output_format": "decimal:",
-    "only_hex": False,
-    "only_binary": False,
-    "only_octal": False,
-    "signed_mode" : False,
-    "word_size": 0}
-    math_engine.config_manager.force_overwrite_settings(x)
+    math_engine.config_manager.reset_settings()

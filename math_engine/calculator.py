@@ -203,9 +203,13 @@ class BinOp:
             return left_value - right_value
 
         elif self.operator == '&':
+            if left_value % 1 != 0 or right_value % 1 != 0:
+                raise E.CalculationError("Bitwise AND requires integers.", code="3042")
             return Decimal(int(left_value) & int(right_value))
 
         elif self.operator == '|':
+            if left_value % 1 != 0 or right_value % 1 != 0:
+                raise E.CalculationError("Bitwise OR requires integers.", code="3042")
             return Decimal(int(left_value) | int(right_value))
 
         elif self.operator == '^':
@@ -748,7 +752,7 @@ def ast(received_string, settings, custom_variables):
 
         # Parenthesized sub-expression
         if token == "(":
-            subtree_in_paren = parse_sum(tokens)
+            subtree_in_paren = parse_bor(tokens)
             if not tokens or tokens.pop(0) != ')':
                 raise E.SyntaxError("Missing closing parenthesis ')'", code="3009")
             return subtree_in_paren
@@ -769,12 +773,12 @@ def ast(received_string, settings, custom_variables):
                 if not tokens or tokens.pop(0) != '(':
                     raise E.SyntaxError(f"Missing opening parenthesis after function {token}", code="3010")
 
-                argument_subtree = parse_sum(tokens)
+                argument_subtree = parse_bor(tokens)
 
                 # Special case: log(number, base)
                 if token == 'log' and tokens and tokens[0] == ',':
                     tokens.pop(0)
-                    base_subtree = parse_sum(tokens)
+                    base_subtree = parse_bor(tokens)
                     if not tokens or tokens.pop(0) != ')':
                         raise E.SyntaxError(f"Missing closing parenthesis after logarithm base.", code="3009")
                     argument_value = argument_subtree.evaluate()
@@ -1094,6 +1098,28 @@ def int_to_value(number, output_prefix, settings):
         raise E.ConversionError(f"Couldnt convert int to non decimal: {e}", code="8001")
 
 
+def apply_word_limit(value,settings:dict):
+    word_size = settings["word_size"]
+    if word_size == 0:
+        return value
+    if value % 1 != 0:
+        raise E.ConversionError("Requires whole numbers.", code="5004")
+    else:
+        try:
+            val_int = int(value)
+            limit = 1 << word_size
+            mask = limit - 1
+            val_int = val_int & mask
+            if settings.get("signed_mode", True):
+                msb_threshold = limit >> 1
+                if val_int >= msb_threshold:
+                    val_int = val_int - limit
+
+            return Decimal(val_int)
+        except Exception as e:
+            raise E.ConversionError("Error converting value into int.", code ="5004")
+
+
 # -----------------------------
 # Public entry point
 # -----------------------------
@@ -1220,6 +1246,7 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
         # Render result based on settings (fractions/decimals, rounding flag)
         if validate == 1:
             result, rounding = cleanup(result)
+            result = apply_word_limit(result, settings)
         approx_sign = "\u2248"  # "≈"
         if validate == 1:
             # --- START OF MODIFIED BLOCK FOR EXPONENTIAL NOTATION CONTROL ---
