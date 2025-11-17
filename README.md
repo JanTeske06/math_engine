@@ -1,4 +1,4 @@
-# Math Engine 0.2.1
+# Math Engine 0.3.0
 
 [![PyPI Version](https://img.shields.io/pypi/v/math-engine.svg)](https://pypi.org/project/math-engine/)
 [![License: MIT](https://img.shields.io/pypi/l/math-engine.svg)](https://opensource.org/licenses/MIT)
@@ -181,6 +181,57 @@ math_engine.evaluate("0b1010 * 3")
 # Decimal('30')
 ```
 
+# Bitwise Operations & Developer Mode (v0.3.0)
+
+Math Engine now acts as a fully functional **Programmer's Calculator**. It supports standard Python operator precedence and bitwise logic.
+
+### New Operators
+
+| Operator | Description | Example | Result |
+| :--- | :--- | :--- | :--- |
+| `&` | Bitwise AND | `3 & 1` | `1` |
+| `\|` | Bitwise OR | `1 \| 2` | `3` |
+| `^` | Bitwise XOR | `3 ^ 1` | `2` |
+| `<<` | Left Shift | `1 << 2` | `4` |
+| `>>` | Right Shift | `8 >> 2` | `2` |
+| `**` | Power | `2 ** 3` | `8` |
+
+> **Note:** Since `^` is now used for **XOR**, use `**` for exponentiation (power).
+
+### Word Size & Overflow Simulation
+
+You can simulate hardware constraints (like C++ `int8`, `uint16`, etc.) by setting a `word_size`.
+
+* **`word_size: 0` (Default):** Python mode (Arbitrary precision, no overflow).
+* **`word_size: 8/16/32/64`:** Enforces bit limits. Numbers will wrap around (overflow).
+
+### Signed vs. Unsigned Mode
+
+When `word_size > 0`, you can toggle how binary data is interpreted using `signed_mode`.
+
+* **`True` (Default):** Uses **Two's Complement**. The highest bit indicates a negative number.
+* **`False`:** Strictly positive numbers (Unsigned).
+
+**Example: 8-Bit Simulation**
+
+```python
+# Setup: 8-Bit Signed Mode
+settings = {
+    "word_size": 8,
+    "signed_mode": True
+}
+math_engine.load_preset(settings)
+
+# Calculation: 127 + 1
+# Mathematically 128, but in 8-bit signed this overflows to -128.
+math_engine.evaluate("127 + 1")
+# Decimal('-128')
+
+# Calculation: -1 in Hex
+# In 8-bit two's complement, -1 is represented as FF.
+math_engine.evaluate("hex: -1")
+# '-0x1' (Value is masked internally to 255)
+```
 ### Force-only-hex mode
 
 ```python
@@ -212,7 +263,10 @@ preset = {
     "default_output_format": "decimal:",
     "only_hex": false,
     "only_binary": false,
-    "only_octal": false
+    "only_octal": false,
+    # New in v0.3.0
+    "word_size": 0,       # 0 = Unlimited, or 8, 16, 32, 64
+    "signed_mode": true,  # True = Two's Complement, False = Unsigned
 }
 
 math_engine.load_preset(preset)
