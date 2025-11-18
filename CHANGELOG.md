@@ -4,8 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
 ---
 
+## [0.6.0] - 2025-11-18
+
+### Added
+- **Visual Error Handling System:** - Introduced the `readable_error` setting. When set to `True` (default), the engine captures exceptions internally and prints a visual diagnostic chart (with a `^` pointer) to the console instead of crashing.
+- **Precise Error Positioning:**
+  - All `MathError` exceptions (`SyntaxError`, `CalculationError`, etc.) now include `position_start` and `position_end` attributes.
+  - Allows developers to programmatically highlight the exact character or token range responsible for an error.
+- **Enhanced CLI Diagnostics:**
+  - The command-line interface now utilizes the positioning system to display user-friendly, location-aware error messages.
+
+### Improved
+- **Settings Management:** Updated `load_preset` and configuration logic to support the new error handling modes.
+- **Exception Clarity:** Error messages are now decoupled from Python's traceback, providing cleaner output for end-users.
+
+---
 ## [0.5.0] - 2025-11-17 
 
 ### Added

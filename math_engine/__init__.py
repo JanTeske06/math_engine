@@ -8,7 +8,7 @@ from . import error as E
 from typing import Any, Mapping, Optional
 from typing import Union
 from typing import Any, Mapping
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 memory = {}
 
 def set_memory(key_value: str, value:str):
@@ -183,6 +183,6 @@ def validate(expr: str,
 
 def reset_settings():
     config_manager.reset_settings()
-#
-if __name__ == '__main__':
-    print(evaluate("sin 5"))
+# #
+# if __name__ == '__main__':
+#     print(evaluate("sin 5"))

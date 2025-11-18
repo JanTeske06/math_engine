@@ -1,5 +1,5 @@
 
-# Math Engine 0.5.0
+# Math Engine v0.6.0
 
 [![PyPI Version](https://img.shields.io/pypi/v/math-engine.svg)](https://pypi.org/project/math-engine/)
 [![License: MIT](https://img.shields.io/pypi/l/math-engine.svg)](https://opensource.org/licenses/MIT)
@@ -377,6 +377,8 @@ preset = {
     # New in 0.3.0
     "word_size": 0,        # 0 = unlimited, or 8, 16, 32, 64
     "signed_mode": True,   # True = Two's Complement, False = Unsigned
+    # New in 0.6.0
+    "readable_error": False
 }
 
 math_engine.load_preset(preset)
@@ -396,87 +398,83 @@ decimal_places = math_engine.load_one_setting("decimal_places")
 
 -----
 
-Gerne, hier ist nur der aktualisierte Abschnitt für die `README.md`, den Sie direkt in Ihrem **Error Handling** Abschnitt einfügen können.
 
-Ich habe die Versionsnummern auf **v0.6.0** aktualisiert, um die neuen Features zu reflektieren.
+# Error Handling (v0.6.0: Visual & Precise)
 
------
+Math Engine 0.6.0 introduces a dual-mode error handling system designed for both interactive use and strict library integration.
 
-## 🚨 Error Handling (v0.6.0: Enhanced Positioning)
+## 1\. Visual Feedback (Default Behavior)
 
-Every error is a custom exception with:
+By default (`readable_error = True`), the engine catches syntax errors internally and prints a visual diagnostic to the console. This is perfect for CLI tools or quick debugging, as it points exactly to the issue without crashing the program.
 
-  * Human-readable message
-  * Machine-readable error code
-  * **Precise position of the error:**
-      * `e.position_start` (int): Index where the problematic token/sequence begins.
-      * `e.position_end` (int): Index where the problematic token/sequence ends.
-  * The original expression (`e.equation`).
+```python
+import math_engine
 
-### Example: Catching the Precise Error Location
+# readable_error is True by default
+math_engine.evaluate("sin(5") 
+```
 
-The `MathError` object now carries `position_start` and `position_end`, allowing reliable programmatic error handling and visual display.
+**Console Output:**
+
+```text
+Errormessage: Unbalanced parenthesis.
+Code: 2010
+Equation: sin(5
+             ^ HERE IS THE PROBLEM (Position: 5)
+```
+
+## 2\. Programmatic Handling (Exceptions)
+
+If you are building an application or running unit tests, you likely want to catch exceptions instead of printing to stdout. You can disable `readable_error` to raise standard `MathError` exceptions.
+
+The exception object carries **precise start and end indices**:
+
+  * `e.position_start` (int): Index where the error begins.
+  * `e.position_end` (int): Index where the error ends.
+
+<!-- end list -->
 
 ```python
 import math_engine
 from math_engine import error as E
 
+# Disable visual printing to catch exceptions
+math_engine.change_setting("readable_error", False)
+
 try:
-    # Example: Trying to use multiple decimal points
     math_engine.evaluate("10.5 + 4.2.1")
 except E.SyntaxError as e:
     print(f"Error Code: {e.code}")
-    print(f"Message: {e.message}")
+    print(f"Location: {e.position_start} to {e.position_end}")
     
-    # 💥 Access the new position fields
-    start_pos = e.position_start 
-    end_pos = e.position_end 
-    
-    if start_pos != -1:
-        print(f"\nEquation: {e.equation}")
-        print(f"Problematic segment: Indices {start_pos} to {end_pos}")
-        
-        # Optional: Visually highlight the error segment for debugging
-        equation = e.equation
-        error_segment = equation[start_pos:end_pos+1]
-        print(equation[:start_pos] + ">>>" + error_segment + "<<<" + equation[end_pos+1:])
-    
-# Expected Console Output (with simulated indices):
-# Error Code: 3008
-# Message: More than one '.' in one number.
-# 
-# Equation: 10.5 + 4.2.1
-# Problematic segment: Indices 9 to 11
-# 10.5 + 4.>>>2.1<<<
+    # You can use these indices to highlight the error in your own UI
+    bad_part = e.equation[e.position_start : e.position_end + 1]
+    print(f"Invalid segment: '{bad_part}'")
+
 ```
 
------
+## Testing and Reliability
 
-### Testing and Reliability (Updated)
-
-math\_engine is designed with testing in mind:
-
-  * Full error-code consistency
-  * Strict syntax rules
-  * Unit-test friendly behavior
-  * No reliance on Python’s runtime execution
-
-Example with `pytest`:
+To write unit tests with `pytest`, ensure you set `readable_error` to `False` so that exceptions are raised and can be asserted.
 
 ```python
 import pytest
 import math_engine
 from math_engine import error as E
 
-def test_division_by_zero_error_code_and_position():
+def test_division_by_zero():
+    # Ensure exceptions are raised
+    math_engine.change_setting("readable_error", False)
+    
     with pytest.raises(E.CalculationError) as exc:
-        math_engine.evaluate("1/0")
+        math_engine.evaluate("10 / 0")
         
+    # Assert the error is Division by Zero (3003)
     assert exc.value.code == "3003"
-    assert exc.value.position_start == 1 # Position des Operators
-    assert exc.value.position_end == 1
+    # Assert the error points exactly to the zero/operator
+    assert exc.value.position_start == 3 
 ```
-
+---
 # Performance
 
   * No use of Python `eval()`
