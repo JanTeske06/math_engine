@@ -238,7 +238,8 @@ def run_interactive_mode():
                 continue
 
             result = process_input_and_evaluate(user_input)
-            print(result)
+            if result != None:
+                print(result)
 
         except (KeyboardInterrupt, EOFError):
             print("\nGoodbye!")
@@ -285,7 +286,7 @@ def process_input_and_evaluate(user_input):
                 val = val_str
 
             temp_vars[key] = val
-    return evaluate(expression, **temp_vars)
+    return evaluate(expression, **temp_vars, is_cli=True)
 
 # --- Entry Point ---
 
@@ -298,7 +299,7 @@ def main():
 
     if args.expression:
         try:
-            result = evaluate(args.expression)
+            result = evaluate_cli(args.expression)
             print(result)
         except Exception as e:
             print(f"Error: {e}")

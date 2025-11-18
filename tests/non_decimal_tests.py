@@ -21,7 +21,8 @@ DEFAULT_SETTINGS = {"decimal_places": 2,
     "only_binary": False,
     "only_octal": False,
     "signed_mode" : False,
-    "word_size": 0}
+    "word_size": 0,
+    "readable_error" : False,}
 
 
 @pytest.fixture(autouse=True)
@@ -35,6 +36,27 @@ def load_defaults(**overrides):
     settings.update(overrides)
     math_engine.load_preset(settings)
 
+
+def assert_error_location(expression, expected_code, expected_start_index, expected_end_index=-1):
+    """
+    Executes the expression and asserts that:
+    1. An error is raised.
+    2. The error code matches.
+    3. The 'position_start' matches the exact character index in the string.
+    """
+    with pytest.raises(E.MathError) as exc:
+        math_engine.evaluate(expression)
+
+    # Debug info to help if tests fail
+    print(f"\nTesting Expression: '{expression}'")
+    print(f"Expected: Code {expected_code} at Index {expected_start_index}")
+    print(f"Actual:   Code {exc.value.code} at Index {exc.value.position_start}")
+
+    assert exc.value.code == expected_code
+    assert exc.value.position_start == expected_start_index
+
+    if expected_end_index != -1:
+        assert exc.value.position_end == expected_end_index
 # ---------------------------------------------------------------------------
 # 1) Grundrechenarten & Präzedenz
 # ---------------------------------------------------------------------------
@@ -448,7 +470,7 @@ def test_load_one_setting():
 
 def test_validate_valid_expression_returns_without_exception():
     result = math_engine.validate("3+3")
-    # je nach Implementierung kann result AST sein oder irgendwas – Hauptsache kein Fehler
+    print(result)
     assert result is not None
 
 
@@ -840,6 +862,89 @@ def test_testbit_requires_integer_arguments():
         math_engine.evaluate("bool:testbit(1.5, 0)")
     assert exc.value.code == "3041"
 
+
+
+# ---------------------------------------------------------------------------
+# 21
+# ---------------------------------------------------------------------------
+
+def test_21_pos_double_decimal_point():
+    # Input: "12.3.4" -> 2nd dot at index 4
+    assert_error_location("12.3.4", "3008", 4)
+
+def test_22_pos_unexpected_token_symbol():
+    # Input: "1 + $ 2" -> $ at index 4
+    assert_error_location("1 + $ 2", "3012", 4)
+
+def test_23_pos_invalid_hex_digit():
+    # Input: "0xZZ" -> Z at index 2
+    assert_error_location("0xZZ", "8004", 2)
+
+def test_24_pos_missing_exponent_value():
+    # Input: "1.5e" -> e at index 3
+    assert_error_location("1.5e", "3032", 3)
+
+def test_25_pos_double_exponent_sign():
+    # Input: "1eEE"
+    # 0='1', 1='e', 2='E' (invalid).
+    # Engine flags the first invalid 'E'.
+    assert_error_location("1eEE", "3031", 2)
+
+def test_26_pos_missing_closing_paren_end_of_string():
+    # Input: "(1+2"
+    # Engine logic: Error at (opening_paren_pos + 1)
+    # '(' is at 0, so error is at 1.
+    assert_error_location("(1+2", "3009", 0)
+
+def test_27_pos_missing_opening_paren_for_function():
+    # New logic: "sin" without "(" is treated as a variable name that is too long.
+    assert_error_location("sin 5", "3010", 2)
+
+def test_28_pos_missing_number_after_operator():
+    # Input: "5 +" -> + at index 2
+    assert_error_location("5 +", "3029", 2)
+
+def test_29_pos_multiple_equals_signs():
+    # Input: "x = 5 = 6" -> 2nd = at index 6
+    assert_error_location("x = 5 = 6", "3036", 6)
+
+def test_30_pos_operator_at_start():
+    # Input: "* 5" -> * at index 0
+    assert_error_location("* 5", "3028", 0)
+
+def test_31_pos_division_by_zero():
+    # Input: "10 / 0" -> / at index 3
+    assert_error_location("10 / 0", "3003", 3)
+
+def test_32_pos_bit_function_float_argument():
+    # Input: "setbit(1.5, 1)" -> setbit starts at 0
+    assert_error_location("setbit(1.5, 1)", "3041", 0)
+
+def test_33_pos_bitnot_extra_comma():
+    # Input: "bitnot(5, 2)" -> , at index 8
+    assert_error_location("bitnot(5, 2)", "8008", 8)
+
+def test_34_pos_invalid_shift_syntax_mixed():
+    assert_error_location("1 >< 2", "3040", -1)
+
+def test_35_pos_whitespace_offset_division():
+    # Input: "10   /   0" -> / at index 5
+    assert_error_location("10   /   0", "3003", 5)
+
+def test_36_pos_whitespace_offset_unexpected_char():
+    # Input: "1   @" -> @ at index 4
+    assert_error_location("1   @", "3012", 4)
+
+def test_37_pos_scientific_notation_missing_exponent_padded():
+    # Input: "1.5e   " -> e at index 3
+    assert_error_location("1.5e   ", "3032", 3)
+
+def test_38_pos_function_name_too_long_for_variable_check():
+    # Input: "(( 1 )"
+    # Outer '(' at 0. Inner '(' at 1.
+    # Inner block closes fine. Outer block unclosed.
+    # Engine logic: Error at (outer_paren_pos + 1) = 1.
+    assert_error_location("(( 1 )", "3009", 0)
 
 # --- Kombinierter Integrationstest ---------------------------------------
 

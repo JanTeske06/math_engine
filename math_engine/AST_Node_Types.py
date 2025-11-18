@@ -8,11 +8,13 @@ from . import error as E
 class Number:
     """AST node for numeric literal backed by Decimal."""
 
-    def __init__(self, value):
+    def __init__(self, value, position_start=-1, position_end=-1):
         # Always normalize input to Decimal via string to avoid float artifacts
         if not isinstance(value, Decimal):
             value = str(value)
         self.value = Decimal(value)
+        self.position_start = position_start
+        self.position_end = position_end
 
     def evaluate(self):
         """Return Decimal value for this literal."""
@@ -23,11 +25,9 @@ class Number:
         return (0, self.value)
 
     def __repr__(self):
-        # Helpful for debugging/printing the AST
         try:
             display_value = self.value.to_normal_string()
         except AttributeError:
-            # Fallback for older Decimal versions
             display_value = str(self.value)
         return f"Number({display_value})"
 
@@ -35,21 +35,21 @@ class Number:
 class Variable:
     """AST node representing a single symbolic variable (e.g. 'var0')."""
 
-    def __init__(self, name):
+    def __init__(self, name, position_start=-1, position_end=-1):
         self.name = name
+        self.position_start = position_start
+        self.position_end = position_end
 
     def evaluate(self):
         """Variables cannot be directly evaluated without solving."""
-        raise E.SolverError(f"Non linear problem.", code="3005")
+        raise E.SolverError(f"Non linear problem.", code="3005", position_start=self.position_start)
 
     def collect_term(self, var_name):
         """Return (1, 0) if this variable matches var_name; else error."""
         if self.name == var_name:
             return (1, 0)
         else:
-            # Only one variable supported in the linear solver
-            raise E.SolverError(f"Multiple variables found: {self.name}", code="3002")
-            return (0, 0)
+            raise E.SolverError(f"Multiple variables found: {self.name}", code="3002", position_start=self.position_start)
 
     def __repr__(self):
         return f"Variable('{self.name}')"
@@ -58,15 +58,20 @@ class Variable:
 class BinOp:
     """AST node for a binary operation: left <operator> right."""
 
-    def __init__(self, left, operator, right):
+    def __init__(self, left, operator, right, position_start=-1, position_end=-1):
         self.left = left
         self.operator = operator
         self.right = right
+        self.position_start = position_start
+        self.position_end = position_end
 
     def evaluate(self):
         """Evaluate numeric subtree and apply the binary operator."""
         left_value = self.left.evaluate()
         right_value = self.right.evaluate()
+        def check_int(val_l, val_r):
+            if val_l % 1 != 0 or val_r % 1 != 0:
+                raise E.CalculationError(f"Operator '{self.operator}' requires integers.", code="3042", position_start=self.position_start)
 
         if self.operator == '+':
             return left_value + right_value
@@ -75,28 +80,23 @@ class BinOp:
             return left_value - right_value
 
         elif self.operator == '&':
-            if left_value % 1 != 0 or right_value % 1 != 0:
-                raise E.CalculationError("Bitwise AND requires integers.", code="3042")
+            check_int(left_value, right_value)
             return Decimal(int(left_value) & int(right_value))
 
         elif self.operator == '|':
-            if left_value % 1 != 0 or right_value % 1 != 0:
-                raise E.CalculationError("Bitwise OR requires integers.", code="3042")
+            check_int(left_value, right_value)
             return Decimal(int(left_value) | int(right_value))
 
         elif self.operator == '^':
-            if left_value % 1 != 0 or right_value % 1 != 0:
-                raise E.CalculationError("XOR requires integers.", code="3042")
+            check_int(left_value, right_value)
             return Decimal(int(left_value) ^ int(right_value))
 
         elif self.operator == '<<':
-            if left_value % 1 != 0 or right_value % 1 != 0:
-                raise E.CalculationError("Bitshift requires integers.", code="3041")
+            check_int(left_value, right_value)
             return Decimal(int(left_value) << int(right_value))
 
         elif self.operator == '>>':
-            if left_value % 1 != 0 or right_value % 1 != 0:
-                raise E.CalculationError("Bitshift requires integers.", code="3041")
+            check_int(left_value, right_value)
             return Decimal(int(left_value) >> int(right_value))
 
         elif self.operator == '*':
@@ -107,78 +107,55 @@ class BinOp:
 
         elif self.operator == '/':
             if right_value == 0:
-                raise E.CalculationError("Division by zero", code="3003")
+                raise E.CalculationError("Division by zero", code="3003", position_start=self.position_start)
             return left_value / right_value
 
         elif self.operator == '=':
-            # Equality is evaluated to a boolean (used for "= True/False" responses)
             return left_value == right_value
         else:
-            raise E.CalculationError(f"Unknown operator: {self.operator}", code="3004")
+            raise E.CalculationError(f"Unknown operator: {self.operator}", code="3004", position_start=self.position_start)
 
     def collect_term(self, var_name):
-        """Collect linear terms on this subtree into (factor_of_var, constant).
-
-        Only linear combinations are allowed; non-linear forms raise Solver/Syntax errors.
-        """
+        """Collect linear terms on this subtree into (factor_of_var, constant)."""
         (left_factor, left_constant) = self.left.collect_term(var_name)
         (right_factor, right_constant) = self.right.collect_term(var_name)
 
         if self.operator == '+':
-            result_factor = left_factor + right_factor
-            result_constant = left_constant + right_constant
-            return (result_factor, result_constant)
+            return (left_factor + right_factor, left_constant + right_constant)
 
         elif self.operator == '-':
-            result_factor = left_factor - right_factor
-            result_constant = left_constant - right_constant
-            return (result_factor, result_constant)
+            return (left_factor - right_factor, left_constant - right_constant)
 
         elif self.operator == '*':
-            # Only constant * (A*x + B) is allowed. (A*x + B)*(C*x + D) would be non-linear.
+            # Only constant * (A*x + B) is allowed.
             if left_factor != 0 and right_factor != 0:
-                raise E.SyntaxError("x^x Error.", code="3005")
+                raise E.SyntaxError("x^x Error (Non-linear).", code="3005", position_start=self.position_start)
 
             elif left_factor == 0:
-                # B * (C*x + D) = (B*C)*x + (B*D)
-                result_factor = left_constant * right_factor
-                result_constant = left_constant * right_constant
-                return (result_factor, result_constant)
+                return (left_constant * right_factor, left_constant * right_constant)
 
             elif right_factor == 0:
-                # (A*x + B) * D = (A*D)*x + (B*D)
-                result_factor = right_constant * left_factor
-                result_constant = right_constant * left_constant
-                return (result_factor, result_constant)
+                return (right_constant * left_factor, right_constant * left_constant)
 
             elif left_factor == 0 and right_factor == 0:
-                # Pure constant multiplication
-                result_factor = 0
-                result_constant = right_constant * left_constant
-                return (result_factor, result_constant)
+                return (0, right_constant * left_constant)
 
         elif self.operator == '/':
-            # (A*x + B) / D is allowed; division by (C*x + D) is non-linear
             if right_factor != 0:
-                raise E.SolverError("Non-linear equation. (Division by x)", code="3006")
+                raise E.SolverError("Non-linear equation (Division by variable).", code="3006", position_start=self.position_start)
             elif right_constant == 0:
-                raise E.SolverError("Solver: Division by zero", code="3003")
+                raise E.SolverError("Solver: Division by zero", code="3003", position_start=self.position_start)
             else:
-                # (A*x + B) / D = (A/D)*x + (B/D)
-                result_factor = left_factor / right_constant
-                result_constant = left_constant / right_constant
-                return (result_factor, result_constant)
+                return (left_factor / right_constant, left_constant / right_constant)
 
         elif self.operator == '**':
-            # Powers generate non-linear terms (e.g., x^2)
-            raise E.SolverError("Powers are not supported by the linear solver.", code="3007")
+            raise E.SolverError("Powers are not supported by the linear solver.", code="3007", position_start=self.position_start)
 
         elif self.operator == '=':
-            # '=' only belongs at the root for solving; not inside collection
-            raise E.SolverError("Should not happen: '=' inside collect_terms", code="3720")
+            raise E.SolverError("Should not happen: '=' inside collect_terms", code="3720", position_start=self.position_start)
 
         else:
-            raise E.CalculationError(f"Unknown operator: {self.operator}", code="3004")
+            raise E.CalculationError(f"Unknown operator: {self.operator}", code="3004", position_start=self.position_start)
 
     def __repr__(self):
         return f"BinOp({self.operator!r}, left={self.left}, right={self.right})"

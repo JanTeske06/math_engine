@@ -98,6 +98,7 @@ def reset_settings():
         "only_binary": False,
         "only_octal": False,
         "signed_mode": True,
+        "readable_error":True,
         "word_size": 0
     }
     with open(config_json, 'w', encoding='utf-8') as f:

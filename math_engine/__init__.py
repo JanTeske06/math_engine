@@ -61,8 +61,8 @@ def load_one_setting(setting):
 
 def evaluate(expr: str,
              variables: Optional[Mapping[str, Any]] = None,
+             is_cli: bool = False,
              **kwvars: Any) -> Any:
-    explanation = False
     if variables is None:
         merged = dict(kwvars)
     else:
@@ -70,12 +70,70 @@ def evaluate(expr: str,
         merged.update(kwvars)
     global memory
     merged = dict(list(memory.items()) + list(merged.items()))
-    result = calculator.calculate(expr, merged,1) # 0 = Validate, 1 = Calculate
-
-    return result
+    settings = load_all_settings()
 
 
-def evaluate_test(expr: str,
+    if settings["readable_error"] == False:
+        result = calculator.calculate(expr, merged,1) # 0 = Validate, 1 = Calculate
+        return result
+
+
+    elif settings["readable_error"]== True:
+        result = -1
+        try:
+            result = calculator.calculate(expr, merged, 1)  # 0 = Validate, 1 = Calculate
+            return result
+
+        except E.MathError as e:
+            Errormessage = "Errormessage: "
+            code = "Code: "
+            Equation = "Equation: "
+            positon_start = e.position_start
+            positon_end = e.position_end
+
+            if is_cli:
+                if positon_start != -1:
+                    if positon_end == -1:
+                        positon_end = positon_start
+                    if positon_start != positon_end:
+                        print((round((positon_end - positon_start) / 2) + positon_start + 4) * " " + "^ HERE IS THE PROBLEM (Position: " + str(positon_start) + " - " + str(
+                            positon_end) + ")")
+                    else:
+                        print((positon_start + 4) * " " + "^ HERE IS THE PROBLEM (Position: " + str(
+                            positon_start) + ")")
+                        print(code + str(e.code))
+                        print(Errormessage + str(e.message))
+                        print(" ")
+                else:
+                    print(code + str(e.code))
+                    print(Errormessage + str(e.message))
+                    print(Equation + str(e.equation))
+                    print(" ")
+            if is_cli == False:
+                print(Errormessage + str(e.message))
+                print(code + str(e.code))
+                if positon_start != -1:
+                    if positon_end == -1:
+                        positon_end = positon_start
+                    calc_equation = str(e.equation)
+                    print(
+                        Equation + calc_equation[:positon_start] + "\033[4m" + calc_equation[
+                                                                               positon_start:positon_end + 1] + "\033[0m" + calc_equation[
+                                                                                                                            positon_end + 1:]
+                    )
+                    if positon_start != positon_end:
+                        print((round((positon_end - positon_start) / 2) + positon_start + len(
+                            Equation)) * " " + "^ HERE IS THE PROBLEM (Position: " + str(positon_start) + " - " + str(
+                            positon_end) + ")")
+                    else:
+                        print((positon_start + len(Equation)) * " " + "^ HERE IS THE PROBLEM (Position: " + str(
+                            positon_start) + ")")
+                else:
+                    print(Equation + str(e.equation))
+
+
+
+def validate(expr: str,
              variables: Optional[Mapping[str, Any]] = None,
              **kwvars: Any) -> Any:
     explanation = False
@@ -88,73 +146,41 @@ def evaluate_test(expr: str,
     merged = dict(list(memory.items()) + list(merged.items()))
     result = -1
     try:
-        result = calculator.calculate(expr, merged,1) # 0 = Validate, 1 = Calculate
-
-    except E.MathError as e:
-        Errormessage = "Errormessage: "
-        code = "Code: "
-        Equation = "Equation: "
-        positon = e.position
-
-
-
-
-        print(Errormessage + str(e.message))
-        print(code + str(e.code))
-        if positon != -1:
-            calc_equation = str(e.equation)
-            print(Equation +calc_equation[:positon]+ "\033[4m" + calc_equation[positon] + "\033[0m"+ calc_equation[positon+1:])
-
-            print((positon+len(Equation)) * " " + "^ HERE IS THE PROBLEM (Position: " + str(positon) + ")")
-        else:
-            print(Equation + str(e.equation))
-
-    return result
-
-
-def validate(expr: str,
-             variables: Optional[Mapping[str, Any]] = None,
-             **kwvars: Any) -> Any:
-    try:
-        explanation = False
-        if variables is None:
-            merged = dict(kwvars)
-        else:
-            merged = dict(variables)
-            merged.update(kwvars)
-        global memory
-        merged = dict(list(memory.items()) + list(merged.items()))
-
-        result = calculator.calculate(expr, merged, 0) # 0 = Validate, 1 = Calculate
+        result = calculator.calculate(expr, merged, 0)  # 0 = Validate, 1 = Calculate
         return result
 
     except E.MathError as e:
         Errormessage = "Errormessage: "
         code = "Code: "
         Equation = "Equation: "
-        positon = e.position
-
-
-
+        positon_start = e.position_start
+        positon_end = e.position_end
 
         print(Errormessage + str(e.message))
         print(code + str(e.code))
-        if positon != -1:
+        if positon_start != -1:
+            if positon_end == -1:
+                positon_end = positon_start
             calc_equation = str(e.equation)
-            print(Equation +calc_equation[:positon]+ "\033[4m" + calc_equation[positon] + "\033[0m"+ calc_equation[positon+1:])
-
-            print((positon+len(Equation)) * " " + "^ HERE IS THE PROBLEM (Position: " + str(positon) + ")")
+            print(
+                Equation + calc_equation[:positon_start] + "\033[4m" + calc_equation[
+                                                                       positon_start:positon_end + 1] + "\033[0m" + calc_equation[
+                                                                                                                    positon_end + 1:]
+            )
+            if positon_start != positon_end:
+                print((round((positon_end - positon_start) / 2) + positon_start + len(
+                    Equation)) * " " + "^ HERE IS THE PROBLEM (Position: " + str(positon_start) + " - " + str(
+                    positon_end) + ")")
+            else:
+                print((positon_start + len(Equation)) * " " + "^ HERE IS THE PROBLEM (Position: " + str(
+                    positon_start) + ")")
         else:
             print(Equation + str(e.equation))
+
 
 
 def reset_settings():
     config_manager.reset_settings()
 #
 if __name__ == '__main__':
-    #problem = ("x+1", x=5)
-    # print(math_engine.evaluate("bitxor(shr(shl(bitnot(7), 2), 4), 3) + 100"))
-    # print(evaluate("int:(bitand(0b1101,0b1011)+ bitor(0b0011,0b0101)+ bitxor(0xF0,0b1010)+ shl(3,4)+ shr(0b100000,3)+ setbit(0b0001,2)+ clrbit(0b1111,1)+ togbit(0b1010,1))"))
-    # print(evaluate("bool:testbit(0b1010, 3)"))
-    #print(math_engine.evaluate("bitor(bitand(0b101110110, bitnot(4096)),160) * 3"))
-    print(evaluate_test("x="))
+    print(evaluate("sin 5"))

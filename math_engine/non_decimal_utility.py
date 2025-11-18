@@ -56,7 +56,7 @@ def non_decimal_scan(problem: str, b: int, settings: dict):
                 break
             else:
                 # Ungültiges Zeichen für diese Basis
-                raise E.ConversionError(f"Unexpected token in {prefix_name}: {char_a}", code="8004", position=a)
+                raise E.ConversionError(f"Unexpected token in {prefix_name}: {char_a}", code="8004", position_start=a)
             a += 1
 
         # Nach der Schleife ist 'a' der Index *nach* der letzten Ziffer
