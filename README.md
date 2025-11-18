@@ -1,5 +1,5 @@
 
-# Math Engine v0.6.1
+# Math Engine v0.6.3
 
 [![PyPI Version](https://img.shields.io/pypi/v/math-engine.svg)](https://pypi.org/project/math-engine/)
 [![License: MIT](https://img.shields.io/pypi/l/math-engine.svg)](https://opensource.org/licenses/MIT)
@@ -69,7 +69,7 @@ pip install math-engine
 
 # Command Line Interface (CLI)
 
-Math Engine works directly from your terminal\! After installing via pip, you can use the command `math-engine` (or the short alias `calc`).
+Math Engine works directly from your terminal! After installing via pip, you can use the command `math-engine`, `calc` or `start`.
 
 ### 1\. Interactive Mode (REPL)
 
@@ -78,7 +78,7 @@ Start the shell to calculate, manage variables, and change settings dynamically.
 ```bash
 $ math-engine
 
-Math Engine 0.4.0 Interactive Shell
+Math Engine 0.6.3 Interactive Shell
 Type 'help' for commands, 'exit' to leave.
 ----------------------------------------
 Examples:
@@ -378,7 +378,7 @@ preset = {
     "word_size": 0,        # 0 = unlimited, or 8, 16, 32, 64
     "signed_mode": True,   # True = Two's Complement, False = Unsigned
     # New in 0.6.0
-    "readable_error": False
+    "readable_error": True
 }
 
 math_engine.load_preset(preset)
@@ -418,7 +418,7 @@ math_engine.evaluate("sin(5")
 
 ```text
 Errormessage: Unbalanced parenthesis.
-Code: 2010
+Code: 3009 
 Equation: sin(5
              ^ HERE IS THE PROBLEM (Position: 5)
 ```
