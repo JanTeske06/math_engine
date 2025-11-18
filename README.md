@@ -474,6 +474,19 @@ def test_division_by_zero():
     # Assert the error points exactly to the zero/operator
     assert exc.value.position_start == 3 
 ```
+
+### Example Error Codes
+
+| Code | Meaning                     |
+| ---- | --------------------------- |
+| 3003 | Division by zero            |
+| 3034 | Empty input                 |
+| 3036 | Multiple = signs            |
+| 3032 | Multiple-character variable |
+| 8000 | Conversion to int failed    |
+| 8006 | Output conversion error     |
+
+For a complete list of all error codes and their meanings, please see the **[Error Codes Reference](https://github.com/JanTeske06/math_engine/blob/master/ERRORS.md)**.
 ---
 # Performance
 
