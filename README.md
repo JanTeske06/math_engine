@@ -396,45 +396,63 @@ decimal_places = math_engine.load_one_setting("decimal_places")
 
 -----
 
-# Error Handling
+Gerne, hier ist nur der aktualisierte Abschnitt für die `README.md`, den Sie direkt in Ihrem **Error Handling** Abschnitt einfügen können.
+
+Ich habe die Versionsnummern auf **v0.6.0** aktualisiert, um die neuen Features zu reflektieren.
+
+-----
+
+## 🚨 Error Handling (v0.6.0: Enhanced Positioning)
 
 Every error is a custom exception with:
 
   * Human-readable message
   * Machine-readable error code
-  * Position (if applicable)
-  * The original expression
+  * **Precise position of the error:**
+      * `e.position_start` (int): Index where the problematic token/sequence begins.
+      * `e.position_end` (int): Index where the problematic token/sequence ends.
+  * The original expression (`e.equation`).
 
-Example:
+### Example: Catching the Precise Error Location
+
+The `MathError` object now carries `position_start` and `position_end`, allowing reliable programmatic error handling and visual display.
 
 ```python
 import math_engine
 from math_engine import error as E
 
 try:
-    math_engine.evaluate("1/0")
-except E.CalculationError as e:
-    print(e.code)      # 3003
-    print(e.message)   # "Division by zero"
-    print(e.equation)  # "1/0"
+    # Example: Trying to use multiple decimal points
+    math_engine.evaluate("10.5 + 4.2.1")
+except E.SyntaxError as e:
+    print(f"Error Code: {e.code}")
+    print(f"Message: {e.message}")
+    
+    # 💥 Access the new position fields
+    start_pos = e.position_start 
+    end_pos = e.position_end 
+    
+    if start_pos != -1:
+        print(f"\nEquation: {e.equation}")
+        print(f"Problematic segment: Indices {start_pos} to {end_pos}")
+        
+        # Optional: Visually highlight the error segment for debugging
+        equation = e.equation
+        error_segment = equation[start_pos:end_pos+1]
+        print(equation[:start_pos] + ">>>" + error_segment + "<<<" + equation[end_pos+1:])
+    
+# Expected Console Output (with simulated indices):
+# Error Code: 3008
+# Message: More than one '.' in one number.
+# 
+# Equation: 10.5 + 4.2.1
+# Problematic segment: Indices 9 to 11
+# 10.5 + 4.>>>2.1<<<
 ```
-
-### Example Error Codes
-
-| Code | Meaning                     |
-| ---- | --------------------------- |
-| 3003 | Division by zero            |
-| 3034 | Empty input                 |
-| 3036 | Multiple = signs            |
-| 3032 | Multiple-character variable |
-| 8000 | Conversion to int failed    |
-| 8006 | Output conversion error     |
-
-For a complete list of all error codes and their meanings, please see the **[Error Codes Reference](https://github.com/JanTeske06/math_engine/blob/master/ERRORS.md)**.
 
 -----
 
-# Testing and Reliability
+### Testing and Reliability (Updated)
 
 math\_engine is designed with testing in mind:
 
@@ -450,15 +468,14 @@ import pytest
 import math_engine
 from math_engine import error as E
 
-def test_division_by_zero_error_code():
+def test_division_by_zero_error_code_and_position():
     with pytest.raises(E.CalculationError) as exc:
         math_engine.evaluate("1/0")
+        
     assert exc.value.code == "3003"
+    assert exc.value.position_start == 1 # Position des Operators
+    assert exc.value.position_end == 1
 ```
-
-You can also test more advanced behavior (non-decimal, strict modes, bitwise operations, etc.) in the same way.
-
------
 
 # Performance
 

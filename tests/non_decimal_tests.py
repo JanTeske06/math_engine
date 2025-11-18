@@ -965,4 +965,4 @@ def test_all_bit_operations_combined_expression():
     assert result == 344
 
 def test_reset():
-    math_engine.config_manager.reset_settings()
+    math_engine.config_manager.reset_settings_tests()

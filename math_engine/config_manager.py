@@ -84,6 +84,27 @@ def force_overwrite_settings(settings:dict):
         raise E.ConfigError(f"Could not save configuration file: {e}", code = "5002")
 
 
+def reset_settings_tests():
+    x = {
+        "decimal_places": 2,
+        "use_degrees": False,
+        "allow_augmented_assignment": True,
+        "fractions": False,
+        "allow_non_decimal": True,
+        "debug": False,
+        "correct_output_format": True,
+        "default_output_format": "decimal:",
+        "only_hex": False,
+        "only_binary": False,
+        "only_octal": False,
+        "signed_mode": True,
+        "readable_error":False,
+        "word_size": 0
+    }
+    with open(config_json, 'w', encoding='utf-8') as f:
+        json.dump(x, f, indent=4)
+        return 1
+
 def reset_settings():
     x = {
         "decimal_places": 2,
@@ -98,13 +119,12 @@ def reset_settings():
         "only_binary": False,
         "only_octal": False,
         "signed_mode": True,
-        "readable_error":True,
+        "readable_error":False,
         "word_size": 0
     }
     with open(config_json, 'w', encoding='utf-8') as f:
         json.dump(x, f, indent=4)
         return 1
-
 
 def save_setting(key_value, new_value):
     """Persist the given settings back to config.json, with type validation.

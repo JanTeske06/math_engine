@@ -82,8 +82,10 @@ def evaluate(expr: str,
         result = -1
         try:
             result = calculator.calculate(expr, merged, 1)  # 0 = Validate, 1 = Calculate
-            return result
+            if isinstance(result, E.MathError):
+                raise result
 
+            return result
         except E.MathError as e:
             Errormessage = "Errormessage: "
             code = "Code: "

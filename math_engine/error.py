@@ -32,6 +32,8 @@ class MathError(Exception):
         self.code = code
         self.equation = equation
         self.position_start = position_start
+        if position_end == -1:
+            self.position_end = self.position_start
         self.position_end = position_end
 
 class SyntaxError(MathError):
