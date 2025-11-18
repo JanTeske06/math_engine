@@ -8,7 +8,7 @@ from . import error as E
 from typing import Any, Mapping, Optional
 from typing import Union
 from typing import Any, Mapping
-__version__ = "0.6.1"
+__version__ = "0.6.2"
 memory = {}
 
 def set_memory(key_value: str, value:str):
@@ -103,9 +103,9 @@ def evaluate(expr: str,
                     else:
                         print((positon_start + 4) * " " + "^ HERE IS THE PROBLEM (Position: " + str(
                             positon_start) + ")")
-                        print(code + str(e.code))
-                        print(Errormessage + str(e.message))
-                        print(" ")
+                    print(code + str(e.code))
+                    print(Errormessage + str(e.message))
+                    print(" ")
                 else:
                     print(code + str(e.code))
                     print(Errormessage + str(e.message))
