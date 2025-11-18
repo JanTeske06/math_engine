@@ -475,7 +475,7 @@ def test_division_by_zero():
     assert exc.value.position_start == 3 
 ```
 
-### Example Error Codes
+## Example Error Codes
 
 | Code | Meaning                     |
 | ---- | --------------------------- |
