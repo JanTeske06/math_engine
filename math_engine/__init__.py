@@ -59,7 +59,6 @@ def load_one_setting(setting):
     settings = config_manager.load_setting_value(setting)
     return settings
 
-
 def evaluate(expr: str,
              variables: Optional[Mapping[str, Any]] = None,
              **kwvars: Any) -> Any:
@@ -71,11 +70,44 @@ def evaluate(expr: str,
         merged.update(kwvars)
     global memory
     merged = dict(list(memory.items()) + list(merged.items()))
-
     result = calculator.calculate(expr, merged,1) # 0 = Validate, 1 = Calculate
 
-    if isinstance(result, E.MathError):
-        raise result
+    return result
+
+
+def evaluate_test(expr: str,
+             variables: Optional[Mapping[str, Any]] = None,
+             **kwvars: Any) -> Any:
+    explanation = False
+    if variables is None:
+        merged = dict(kwvars)
+    else:
+        merged = dict(variables)
+        merged.update(kwvars)
+    global memory
+    merged = dict(list(memory.items()) + list(merged.items()))
+    result = -1
+    try:
+        result = calculator.calculate(expr, merged,1) # 0 = Validate, 1 = Calculate
+
+    except E.MathError as e:
+        Errormessage = "Errormessage: "
+        code = "Code: "
+        Equation = "Equation: "
+        positon = e.position
+
+
+
+
+        print(Errormessage + str(e.message))
+        print(code + str(e.code))
+        if positon != -1:
+            calc_equation = str(e.equation)
+            print(Equation +calc_equation[:positon]+ "\033[4m" + calc_equation[positon] + "\033[0m"+ calc_equation[positon+1:])
+
+            print((positon+len(Equation)) * " " + "^ HERE IS THE PROBLEM (Position: " + str(positon) + ")")
+        else:
+            print(Equation + str(e.equation))
 
     return result
 
@@ -119,10 +151,10 @@ def validate(expr: str,
 def reset_settings():
     config_manager.reset_settings()
 #
-# if __name__ == '__main__':
-#     #problem = ("x+1", x=5)
-#     print(math_engine.evaluate("bitxor(shr(shl(bitnot(7), 2), 4), 3) + 100"))
-#     print(evaluate("int:(bitand(0b1101,0b1011)+ bitor(0b0011,0b0101)+ bitxor(0xF0,0b1010)+ shl(3,4)+ shr(0b100000,3)+ setbit(0b0001,2)+ clrbit(0b1111,1)+ togbit(0b1010,1))"))
-#     print(evaluate("bool:testbit(0b1010, 3)"))
-#     #print(math_engine.evaluate("bitor(bitand(0b101110110, bitnot(4096)),160) * 3"))
-#     config_manager.reset_settings()
+if __name__ == '__main__':
+    #problem = ("x+1", x=5)
+    # print(math_engine.evaluate("bitxor(shr(shl(bitnot(7), 2), 4), 3) + 100"))
+    # print(evaluate("int:(bitand(0b1101,0b1011)+ bitor(0b0011,0b0101)+ bitxor(0xF0,0b1010)+ shl(3,4)+ shr(0b100000,3)+ setbit(0b0001,2)+ clrbit(0b1111,1)+ togbit(0b1010,1))"))
+    # print(evaluate("bool:testbit(0b1010, 3)"))
+    #print(math_engine.evaluate("bitor(bitand(0b101110110, bitnot(4096)),160) * 3"))
+    print(evaluate_test("x="))

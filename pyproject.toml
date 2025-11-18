@@ -20,6 +20,7 @@ classifiers = [
 [project.scripts]
 math-engine = "math_engine.cli:main"
 calc = "math_engine.cli:main"
+start = "math_engine.cli:main"
 
 [tool.setuptools.package-data]
 "math_engine" = ["config.json"]

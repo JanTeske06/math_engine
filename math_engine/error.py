@@ -26,12 +26,12 @@ class MathError(Exception):
         code (str): 4-digit error code (see ERROR_MESSAGES)
         equation (str|None): original user input that caused the error
     """
-    def __init__(self, message, code="9999", equation=None, position: int = -1):
+    def __init__(self, message, code="9999", equation=None, position_start: int = -1, position_end: int = -1):
         super().__init__(message)
         self.message = message
         self.code = code
         self.equation = equation
-        self.position = position
+        self.position= position_start
 
 class SyntaxError(MathError):
     """Parsing/tokenization/parentheses or general syntax issues."""

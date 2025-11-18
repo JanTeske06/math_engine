@@ -39,6 +39,10 @@ getcontext().prec = 10000
 # -----------------------------
 # Tokenizer
 # -----------------------------
+# PURE_FUNCTION_NAMES = {
+#     'sin', 'cos', 'tan', 'log', 'setbit', 'bitnot', 'bitand',
+#     'bitor', 'bitxor', 'shl', 'shr', 'clrbit', 'togbit', 'testbit'
+# }
 
 RAW_FUNCTION_MAP = {
     "sin(": 'sin',
@@ -62,6 +66,11 @@ RAW_FUNCTION_MAP = {
     "togbit(" : "togbit",
     "testbit(": "testbit"
 }
+
+PURE_FUNCTION_NAMES = {
+    token for start_str, token in RAW_FUNCTION_MAP.items()
+    if start_str.endswith('(')
+}
 FUNCTION_STARTS_OPTIMIZED = {
     start_str: (token, len(start_str))
     for start_str, token in RAW_FUNCTION_MAP.items()
@@ -77,13 +86,13 @@ def translator(problem, custom_variables, settings):
     var_counter = 0
     var_list = [None] * len(problem)  # Track seen variable symbols → var0, var1, ...
     full_problem = []
+    token_spans = []
     b = 0
 
 
 
     CONTEXT_VARS = {}
     for var_name, value in custom_variables.items():
-
         if isinstance(value, (int, float, Decimal)):
             CONTEXT_VARS[var_name] = str(value)
         elif isinstance(value, bool):
@@ -94,9 +103,10 @@ def translator(problem, custom_variables, settings):
     sorted_vars = sorted(CONTEXT_VARS.keys(), key=len, reverse=True)
     HEX_DIGITS = "0123456789ABCDEFabcdef"
     temp_problem = problem
-    for var_name in sorted_vars:
-        value_str = CONTEXT_VARS[var_name]
-        temp_problem = temp_problem.replace(var_name, value_str)
+    # for var_name in sorted_vars:
+    #     value_str = CONTEXT_VARS[var_name]
+    #     value_str = value_str
+    #     temp_problem = temp_problem.replace(var_name, value_str)
 
     problem = temp_problem
 
@@ -109,8 +119,11 @@ def translator(problem, custom_variables, settings):
         for start_str, (token, length) in FUNCTION_STARTS_OPTIMIZED.items():
             if problem.startswith(start_str, b):
                 full_problem.append(token)
+                token_spans.append((b, b+len(token)-1, token))
                 if token != "π" and token != "E" and token != "e":
                     full_problem.append("(")
+                    token_spans.append((b+len(token), b+len(token), "("))
+
                 b += length - 0
                 found_function = True
                 break
@@ -121,41 +134,38 @@ def translator(problem, custom_variables, settings):
 
         # --- Numbers: digits and decimal separator (EXPONENTIAL NOTATION SUPPORT ADDED) ---
         if isInt(current_char) or (b >= 0 and current_char == "."):
-
-            # 1. VERSUCH: Als nicht-dezimale Zahl parsen (0b, 0x, 0o)
+            start_index = b
             parsed_value, new_index = non_decimal_scan(problem, b, settings)
 
             if parsed_value is not None:
-                # Erfolg! Füge Wert hinzu und setze den Index auf das Ende der Zahl
+                original_str = problem[start_index:new_index]
+                token_spans.append((start_index, new_index, original_str))
                 full_problem.append(parsed_value)
-                b = new_index - 1  # -1, da die Schleife am Ende b+1 rechnet
+                b = new_index - 1
 
             else:
-                # 2. VERSUCH: Als Standard-Dezimalzahl parsen (inkl. Exponent)
+
                 str_number = current_char
-                # Bug-Fix: has_decimal_point muss hier korrekt gesetzt werden
                 has_decimal_point = (current_char == '.')
                 has_exponent_e = False
 
-                # Kopieren Sie hier die Logik zum Parsen von Dezimalzahlen
-                # (Ihre ursprünglichen Zeilen 409 - 449)
                 while (b + 1 < len(problem)):
                     next_char = problem[b + 1]
 
                     # 1. Handle decimal points
                     if next_char == ".":
                         if has_decimal_point:
-                            raise E.SyntaxError(f"Double decimal point.", code="3008", position=b + 1)
+                            raise E.SyntaxError(f"Double decimal point.", code="3008", position_start=b + 1)
                         has_decimal_point = True
 
                     # 2. Handle the 'E' or 'e' for exponent
                     elif next_char in ('e', 'E'):
                         if temp_var == b and b > 0:
                             raise E.SyntaxError(f"Multiple digit variables not supported.",
-                                                code="3032", position=b + 1)
+                                                code="3032", position_start=b + 1)
                         if has_exponent_e:
                             # Cannot have two 'e's in a single number
-                            raise E.SyntaxError("Double exponent sign 'E'/'e'.", code="3031", position=b + 1)
+                            raise E.SyntaxError("Double exponent sign 'E'/'e'.", code="3031", position_start=b + 1)
                         has_exponent_e = True
 
                     # 3. Handle the sign (+ or -) immediately following 'E'/'e'
@@ -180,21 +190,26 @@ def translator(problem, custom_variables, settings):
                         str_number = value_to_int("0b"+str_number)
                     elif settings["only_octal"] == True:
                         str_number = value_to_int("0O"+str_number)
+                    token_spans.append((start_index, b, str_number))
                     full_problem.append(Decimal(str_number))
                 else:
                     if has_exponent_e and not str_number[-1].isdigit():
-                        raise E.SyntaxError("Missing exponent value after 'E'/'e'.", code="3032", position=b)
+                        raise E.SyntaxError("Missing exponent value after 'E'/'e'.", code="3032", position_start=b)
 
         # --- Operators ---
         elif isOp(current_char) != -1:
+            start_index = b
             if current_char == "*" and b + 1 < len(problem) and problem[b + 1] == "*":
                 full_problem.append("**")
+                token_spans.append((start_index, b+1, "**"))
                 b += 1
             elif current_char != "<" and current_char != ">":
                 full_problem.append(current_char)
+                token_spans.append((start_index, b, current_char))
             elif current_char == "<" and b<= len(problem)+1:
                 if problem[b+1] == "<":
                     full_problem.append("<<")
+                    token_spans.append((start_index, b + 1, "<<"))
                     b+=1
                 elif problem[b+1] == ">":
                     raise E.SyntaxError("Invalid shift Operation <>", code = "3040")
@@ -204,6 +219,7 @@ def translator(problem, custom_variables, settings):
                 following_char = problem[b + 1]
                 if problem[b + 1] == ">":
                     full_problem.append(">>")
+                    token_spans.append((b, b+1, ">>"))
                     b += 1
                 elif problem[b+1] == "<":
                     raise E.SyntaxError("Invalid shift Operation ><", code = "3040")
@@ -221,18 +237,23 @@ def translator(problem, custom_variables, settings):
         # --- Parentheses ---
         elif current_char == "(":
             full_problem.append("(")
+            token_spans.append((b, b, current_char))
         elif current_char == "≈":  # treat as equality
             full_problem.append("=")
+            token_spans.append((b, b, current_char))
         elif current_char == ")":
             full_problem.append(")")
+            token_spans.append((b, b, current_char))
         elif current_char == ",":
             full_problem.append(",")
+            token_spans.append((b, b, current_char))
 
         # --- Scientific functions and special forms: sin(, cos(, tan(, log(, √(, e^( ---
 
         elif settings.get("only_hex", False) and current_char in HEX_DIGITS:
             # Sammle alle aufeinanderfolgenden Hex-Zeichen (z.B. "FF", "1A3")
             str_number = current_char
+            start_index = b
             while b + 1 < len(problem) and problem[b + 1] in HEX_DIGITS:
                 b += 1
                 str_number += problem[b]
@@ -242,35 +263,71 @@ def translator(problem, custom_variables, settings):
                 int_value = value_to_int("0x" + str_number)
                 full_problem.append(Decimal(int_value))
             except E.ConversionError as e:
-                # Wenn du möchtest, hier ein schönerer Fehler
                 raise
 
         # --- Constant π ---
         elif current_char == 'π':
             if settings["only_hex"] == True or settings["only_binary"] == True or settings["only_octal"]== True:
-                raise E.SyntaxError(f"Error with constant π:{result_string}", code="3033", position=b)
+                raise E.SyntaxError(f"Error with constant π:{result_string}", code="3033", position_start=b)
             result_string = ScientificEngine.isPi(str(current_char))
             try:
                 calculated_value = Decimal(result_string)
                 full_problem.append(calculated_value)
             except ValueError:
-                raise E.CalculationError(f"Error with constant π:{result_string}", code="3219", position=b)
+                raise E.CalculationError(f"Error with constant π:{result_string}", code="3219", position_start=b)
 
         # --- Variables (fallback) ---
         else:
+            start_index = b
+            var_name = ""
+            while b < len(problem):
+                char = problem[b]
+                if char.isalnum() or char == '_':
+                    var_name += char
+                    b += 1
+                else:
+                    break
 
-            if temp_var == b-1 and b > 0 and temp_var != -1:
-                print("x")
-                raise E.SyntaxError(f"Multiple digit variables not supported.", code ="3032", position=b)
+            if len(var_name) == 0:
+                raise E.SyntaxError(f"Unexpected token: {current_char}", code="3012", position_start=b)
 
-            # Map each new variable symbol to var{n} to keep internal representation uniform
-            if current_char in var_list:
-                full_problem.append("var" + str(var_list.index(current_char)))
+            for func_name in PURE_FUNCTION_NAMES:
+                if var_name.startswith(func_name):
+                    raise E.SyntaxError(
+                        f"Function name '{func_name}' must be followed by '('.",
+                        code="3010", position_start=start_index + len(func_name)
+                    )
+
+
+
+            if var_name in custom_variables:
+                val = custom_variables[var_name]
+                if isinstance(val, (int, float)):
+                    val = Decimal(val)
+                elif isinstance(val, bool):
+                    val = Decimal(1) if val else Decimal(0)
+
+                full_problem.append(val)
+                token_spans.append((start_index, b, var_name))
+
+                b = b - 1
+
             else:
-                full_problem.append("var" + str(var_counter))
-                temp_var = b
-                var_list[var_counter] = current_char
-                var_counter += 1
+                if len(var_name) == 0:
+                    raise E.SyntaxError(f"Unexpected token: {current_char}", code="3012", position_start=b)
+
+                if var_name in var_list:
+                    idx = var_list.index(var_name)
+                    full_problem.append("var" + str(idx))
+                else:
+                    full_problem.append("var" + str(var_counter))
+                    if var_counter >= len(var_list):
+                        var_list.append(var_name)
+                    else:
+                        var_list[var_counter] = var_name
+                    var_counter += 1
+                b = b - 1
+                token_spans.append((start_index, b, var_name))
 
         b = b + 1
 
@@ -307,10 +364,17 @@ def translator(problem, custom_variables, settings):
                     insertion_needed = True
 
             if insertion_needed:
+                next_pos = token_spans[b + 1][0] if b + 1 < len(token_spans) else b
+                token_spans.insert(b + 1, (next_pos, next_pos, "*_impl"))
                 full_problem.insert(b + 1, '*')
 
         b += 1
-    return full_problem, var_counter
+    print(problem)
+    for item in token_spans:
+        print(item)
+
+    print(full_problem)
+    return full_problem, var_counter, token_spans
 
 
 # -----------------------------
@@ -325,13 +389,14 @@ def ast(received_string, settings, custom_variables):
     augmented assignment patterns like `12+=6`):
       - settings["allow_augmented_assignment"] → influences pre-parse validation/rewrites.
     """
-    analysed, var_counter = translator(received_string, custom_variables, settings)
+    analysed, var_counter, token_spans = translator(received_string, custom_variables, settings)
     d = 0
     mutliple_equalsign = False
     temp_position = -2
     expected_bool = False
+    token_spans = list(token_spans)
     while d < len(analysed):
-        "3==3"
+        #"3==3"
         if analysed[d] == "=":
             if temp_position != -2 and temp_position != d-1:
                 raise E.CalculationError("Multiple Equal signs in one Problem.", code = "3036")
@@ -363,7 +428,7 @@ def ast(received_string, settings, custom_variables):
             # Case 1: operator directly followed by '=' (e.g., "+=") without AA allowed → error
             if (len(analysed) != b + 1) and (analysed[b + 1] == "=" and (analysed[b] in Operations)) and (
                     settings["allow_augmented_assignment"] == False):
-                raise E.CalculationError("Missing Number before '='.", code="3028")
+                raise E.CalculationError("Missing Number before '='.", code="3028", position_start=b)
 
             # Case 1a (NEW): If AA is allowed and there is NO variable in the expression,
             # rewrite "A += B" into "A = (A + B)":
@@ -377,25 +442,27 @@ def ast(received_string, settings, custom_variables):
                 analysed.insert(b + 2, "(")
                 analysed.pop(b + 1)
 
-            # Case 1b (NEW): If AA is attempted while variables exist, forbid it
+            # Case 1b: If AA is attempted while variables exist, forbid it
             # to avoid ambiguous solver semantics.
             elif ((len(analysed) != b + 1 or len(analysed) != b + 2) and (
                     analysed[b + 1] == "=" and (analysed[b] in Operations)) and (
                           settings["allow_augmented_assignment"] == True) and "var0" in analysed):
-                raise E.CalculationError("Augmented assignment not allowed with variables.", code="3030")
+                raise E.CalculationError("Augmented assignment not allowed with variables.", code="3030", position_start=b)
 
             # Case 2: '=' precedes an operator (e.g., "=+") → number missing after '='
             elif (b > 0) and (analysed[b + 1] == "=" and (analysed[b] in Operations)):
-                raise E.CalculationError("Missing Number after '='.", code="3028")
+                raise E.CalculationError("Missing Number after '='.", code="3028", position_start=b)
 
-            # NEW: Expression ends with an operator → explicit "missing number" after that operator.
+            # Expression ends with an operator → explicit "missing number" after that operator.
             elif analysed[-1] in Operations:
-                raise E.CalculationError(f"Missing Number after {analysed[-1]}", code="3029")
+                token_index_of_error = len(analysed) - 1
+                char_index_of_error = token_spans[token_index_of_error][1]
+                raise E.CalculationError(f"Missing Number after {analysed[-1]}", code="3029", position_start=char_index_of_error)
 
-            # NEW: operator followed by '=' (AA disabled) and no variables → still "missing number after <op>"
+            # operator followed by '=' (AA disabled) and no variables → still "missing number after <op>"
             elif (analysed[b] in Operations and (analysed[b + 1] == "=" and (
                     settings["allow_augmented_assignment"] == False))) and not "var0" in analysed:
-                raise E.CalculationError(f"Missing Number after {analysed[b]}", code="3029")
+                raise E.CalculationError(f"Missing Number after {analysed[b]}", code="3029", position_start=b)
 
             b += 1
 
@@ -407,7 +474,8 @@ def ast(received_string, settings, custom_variables):
         print(analysed)
     # ---- Parsing functions in precedence order ----
 
-    def parse_factor(tokens):
+
+    def parse_factor(tokens, token_spans):
         """Numbers, variables, sub-expressions in '()', and scientific functions."""
         if len(tokens) > 0:
             token = tokens.pop(0)
@@ -417,7 +485,7 @@ def ast(received_string, settings, custom_variables):
 
         # Parenthesized sub-expression
         if token == "(":
-            subtree_in_paren = parse_bor(tokens)
+            subtree_in_paren = parse_bor(tokens, token_spans)
             if not tokens or tokens.pop(0) != ')':
                 raise E.SyntaxError("Missing closing parenthesis ')'", code="3009")
             return subtree_in_paren
@@ -438,13 +506,13 @@ def ast(received_string, settings, custom_variables):
                 if not tokens or tokens.pop(0) != '(':
                     raise E.SyntaxError(f"Missing opening parenthesis after function {token}", code="3010")
 
-                argument_subtree = parse_bor(tokens)
+                argument_subtree = parse_bor(tokens, token_spans)
 
 
                 # Special case: log(number, base)
                 if token == 'log' and tokens and tokens[0] == ',':
                     tokens.pop(0)
-                    base_subtree = parse_bor(tokens)
+                    base_subtree = parse_bor(tokens, token_spans)
                     if not tokens or tokens.pop(0) != ')':
                         raise E.SyntaxError(f"Missing closing parenthesis after logarithm base.", code="3009")
                     argument_value = argument_subtree.evaluate()
@@ -474,12 +542,13 @@ def ast(received_string, settings, custom_variables):
             if not tokens or tokens.pop(0) != '(':
                 raise E.SyntaxError(f"Missing opening parenthesis after bit function {token}", code="3010")
 
-            argument_subtree = parse_bor(tokens)
+            argument_subtree = parse_bor(tokens, token_spans)
             if token == 'setbit':
                 if not tokens or tokens.pop(0) != ',':
+                    token_spans.pop(0)
                     raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
 
-                base_subtree = parse_bor(tokens)
+                base_subtree = parse_bor(tokens, token_spans)
 
                 if not tokens or tokens.pop(0) != ')':
                     raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
@@ -500,7 +569,7 @@ def ast(received_string, settings, custom_variables):
                 if not tokens or tokens.pop(0) != ',':
                     raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
 
-                base_subtree = parse_bor(tokens)
+                base_subtree = parse_bor(tokens, token_spans)
 
                 if not tokens or tokens.pop(0) != ')':
                     raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
@@ -521,7 +590,7 @@ def ast(received_string, settings, custom_variables):
                 if not tokens or tokens.pop(0) != ',':
                     raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
 
-                base_subtree = parse_bor(tokens)
+                base_subtree = parse_bor(tokens, token_spans)
 
                 if not tokens or tokens.pop(0) != ')':
                     raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
@@ -542,7 +611,7 @@ def ast(received_string, settings, custom_variables):
                 if not tokens or tokens.pop(0) != ',':
                     raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
 
-                base_subtree = parse_bor(tokens)
+                base_subtree = parse_bor(tokens, token_spans)
 
                 if not tokens or tokens.pop(0) != ')':
                     raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
@@ -563,7 +632,7 @@ def ast(received_string, settings, custom_variables):
                 if not tokens or tokens.pop(0) != ',':
                     raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
 
-                base_subtree = parse_bor(tokens)
+                base_subtree = parse_bor(tokens, token_spans)
 
                 if not tokens or tokens.pop(0) != ')':
                     raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
@@ -584,7 +653,7 @@ def ast(received_string, settings, custom_variables):
                 if not tokens or tokens.pop(0) != ',':
                     raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
 
-                base_subtree = parse_bor(tokens)
+                base_subtree = parse_bor(tokens, token_spans)
 
                 if not tokens or tokens.pop(0) != ')':
                     raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
@@ -605,7 +674,7 @@ def ast(received_string, settings, custom_variables):
                 if not tokens or tokens.pop(0) != ',':
                     raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
 
-                base_subtree = parse_bor(tokens)
+                base_subtree = parse_bor(tokens, token_spans)
 
                 if not tokens or tokens.pop(0) != ')':
                     raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
@@ -626,7 +695,7 @@ def ast(received_string, settings, custom_variables):
                 if not tokens or tokens.pop(0) != ',':
                     raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
 
-                base_subtree = parse_bor(tokens)
+                base_subtree = parse_bor(tokens, token_spans)
 
                 if not tokens or tokens.pop(0) != ')':
                     raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
@@ -647,7 +716,7 @@ def ast(received_string, settings, custom_variables):
                 if not tokens or tokens.pop(0) != ',':
                     raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009")
 
-                base_subtree = parse_bor(tokens)
+                base_subtree = parse_bor(tokens, token_spans)
 
                 if not tokens or tokens.pop(0) != ')':
                     raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009")
@@ -711,11 +780,11 @@ def ast(received_string, settings, custom_variables):
         else:
             raise E.SyntaxError(f"Unexpected token: {token}", code="3012")
 
-    def parse_unary(tokens):
+    def parse_unary(tokens, token_spans):
         """Handle leading '+'/'-' (unary minus becomes 0 - operand)."""
         if tokens and tokens[0] in ('+', '-'):
             operator = tokens.pop(0)
-            operand = parse_unary(tokens)
+            operand = parse_unary(tokens, token_spans)
 
             if operator == '-':
                 # Optimize for literal: -Number → Number(-value)
@@ -724,14 +793,14 @@ def ast(received_string, settings, custom_variables):
                 return BinOp(Number('0'), '-', operand)
             else:
                 return operand
-        return parse_power(tokens)
+        return parse_power(tokens, token_spans)
 
-    def parse_power(tokens):
+    def parse_power(tokens, token_spans):
         """Exponentiation '^' (handled before * and +)."""
-        current_subtree = parse_factor(tokens)
+        current_subtree = parse_factor(tokens, token_spans)
         while tokens and (tokens[0] == "**"):
             operator = tokens.pop(0)
-            right_part = parse_unary(tokens)
+            right_part = parse_unary(tokens, token_spans)
             if not isinstance(current_subtree, Variable) and not isinstance(right_part, Variable):
                 # Pre-evaluate when both sides are numeric
                 base = current_subtree.evaluate()
@@ -743,67 +812,68 @@ def ast(received_string, settings, custom_variables):
                 current_subtree = BinOp(current_subtree, operator, right_part)
         return current_subtree
 
-    def parse_term(tokens):
+    def parse_term(tokens, token_spans):
         """Multiplication and division."""
-        current_subtree = parse_unary(tokens)
+        current_subtree = parse_unary(tokens, token_spans)
         while tokens and tokens[0] in ("*", "/"):
             operator = tokens.pop(0)
-            right_part = parse_unary(tokens)
+            right_part = parse_unary(tokens, token_spans)
             current_subtree = BinOp(current_subtree, operator, right_part)
         return current_subtree
 
-    def parse_shift(tokens):
-        current_subtree = parse_sum(tokens)
+    def parse_shift(tokens, token_spans):
+        current_subtree = parse_sum(tokens, token_spans)
         while tokens and tokens[0] in ("<<", ">>"):
             operator = tokens.pop(0)
-            right_side = parse_sum(tokens)
+            right_side = parse_sum(tokens, token_spans)
             current_subtree = BinOp(current_subtree, operator, right_side)
         return current_subtree
 
-    def parse_sum(tokens):
+    def parse_sum(tokens, token_spans):
         """Addition and subtraction."""
-        current_subtree = parse_term(tokens)
+        current_subtree = parse_term(tokens, token_spans)
         while tokens and tokens[0] in ("+", "-"):
             operator = tokens.pop(0)
-            right_side = parse_term(tokens)
+            right_side = parse_term(tokens, token_spans)
             current_subtree = BinOp(current_subtree, operator, right_side)
         return current_subtree
 
-    def parse_bor(tokens):
-        current_subtree = parse_bxor(tokens)
+    def parse_bor(tokens, token_spans):
+        current_subtree = parse_bxor(tokens, token_spans)
         while tokens and tokens[0] == "|":
             operator = tokens.pop(0)
-            right_side = parse_bxor(tokens)
+            right_side = parse_bxor(tokens, token_spans)
             current_subtree = BinOp(current_subtree, operator, right_side)
         return current_subtree
 
-    def parse_bxor(tokens):
-        current_subtree = parse_band(tokens)
+    def parse_bxor(tokens, token_spans):
+        current_subtree = parse_band(tokens, token_spans)
         while tokens and tokens[0] == "^":
             operator = tokens.pop(0)
-            right_side = parse_band(tokens)
+            right_side = parse_band(tokens, token_spans)
             current_subtree = BinOp(current_subtree, operator, right_side)
         return current_subtree
 
-    def parse_band(tokens):
-        current_subtree = parse_shift(tokens)
+    def parse_band(tokens, token_spans):
+        current_subtree = parse_shift(tokens, token_spans)
         while tokens and tokens[0] == "&":
             operator = tokens.pop(0)
-            right_side = parse_shift(tokens)
+            right_side = parse_shift(tokens, token_spans)
             current_subtree = BinOp(current_subtree, operator, right_side)
         return current_subtree
 
-    def parse_gleichung(tokens):
+    def parse_gleichung(tokens, token_spans):
         """Optional '=' at the top level: build BinOp('=') when present."""
-        left_side = parse_bor(tokens)
+        left_side = parse_bor(tokens, token_spans)
         if tokens and tokens[0] == "=":
             operator = tokens.pop(0)
-            right_side = parse_shift(tokens)
+            right_side = parse_shift(tokens, token_spans)
             return BinOp(left_side, operator, right_side)
         return left_side
 
+
     # Build the final AST
-    final_tree = parse_gleichung(analysed)
+    final_tree = parse_gleichung(analysed, token_spans)
     # Decide if this is a CAS-style equation with <= 1 variable
     if isinstance(final_tree, BinOp) and final_tree.operator == '=' and var_counter <= 1:
         cas = True
@@ -1163,26 +1233,6 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
         )
 
     except E.ConversionOutputError as e:
-        # fallback_versuche = [ "decimal:", "boolean:", "string:"]
-        #
-        # if settings["correct_output_format"] == True and settings["only_hex"] == False and settings["only_binary"] == False and settings["only_octal"]== False:
-        #     for versuch in fallback_versuche:
-        #         try:
-        #             if versuch == "decimal:":
-        #                 if isDecimal(output_string) != False:
-        #                     return Decimal(output_string)
-        #
-        #             elif versuch == "boolean:":
-        #                 bool_result = boolean(output_string)
-        #                 if bool_result in (True, False):
-        #                     return bool_result
-        #
-        #             elif versuch == "string:":
-        #                 return str(output_string)
-        #
-        #         except Exception as e:
-        #             continue
-        # else:
             raise E.ConversionError(
                 f"Couldnt convert result '{output_string}' into '{output_prefix}'",
                 code="8006"
