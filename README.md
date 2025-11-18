@@ -1,5 +1,5 @@
 
-# Math Engine v0.6.0
+# Math Engine v0.6.1
 
 [![PyPI Version](https://img.shields.io/pypi/v/math-engine.svg)](https://pypi.org/project/math-engine/)
 [![License: MIT](https://img.shields.io/pypi/l/math-engine.svg)](https://opensource.org/licenses/MIT)

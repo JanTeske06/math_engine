@@ -8,7 +8,7 @@ from . import error as E
 from typing import Any, Mapping, Optional
 from typing import Union
 from typing import Any, Mapping
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 memory = {}
 
 def set_memory(key_value: str, value:str):
