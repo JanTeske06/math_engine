@@ -12,9 +12,10 @@ Pipeline
 4) Formatter: renders results using Decimal/Fraction and user preferences.
 """
 
-from decimal import Decimal, getcontext, Overflow
+from decimal import Decimal, getcontext, Overflow, DivisionImpossible, InvalidOperation
 import fractions
 from typing import Union
+import re
 
 from .utility import boolean, isDecimal, get_line_number, isInt, isfloat, isScOp, isOp, isolate_bracket
 from . import config_manager as config_manager
@@ -987,6 +988,42 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
     settings = config_manager.load_setting_value("all")  # pass UI settings down to parser
     global debug
     debug = settings.get("debug", False)
+    target_places = settings.get("decimal_places", 2)
+
+    input_numbers = re.findall(r'\d+(?:\.\d+)?', problem)
+
+    max_input_length = len(max(input_numbers, key=len)) if input_numbers else 0
+
+    MAX_DIGIT_LIMIT = 20000
+    if max_input_length > MAX_DIGIT_LIMIT:
+        raise E.CalculationError(
+            f"Input number exceeds limit of {MAX_DIGIT_LIMIT} digits.",
+            code="3026",
+            equation=problem
+        )
+
+    max_var_length = 0
+    for val in custom_variables.values():
+        s_val = str(val)
+        clean_len = len(s_val.replace('.', '').replace('-', ''))
+        if clean_len > max_var_length:
+            max_var_length = clean_len
+
+    SAFETY_BUFFER = 50
+    MIN_PRECISION = 100
+
+    needed_precision = max(
+        MIN_PRECISION,
+        max_input_length + SAFETY_BUFFER,
+        max_var_length + SAFETY_BUFFER,
+        target_places + SAFETY_BUFFER
+    )
+
+    needed_precision = min(needed_precision, 10000)
+    getcontext().prec = needed_precision
+
+    if debug == True:
+        print(f"[DEBUG] Precision set to: {needed_precision} (Input: {max_input_length}, Target: {target_places})")
     var_list = []
     allowed_prefix = (
         "dec:", "d:", "Decimal:",
@@ -1188,13 +1225,12 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
 
 
     # Known numeric overflow
-    except Overflow as e:
+    except (Overflow, DivisionImpossible, InvalidOperation) as e:
         raise E.CalculationError(
-            message="Number too large (Arithmetic overflow).",
+            message="Number too large or invalid operation (Arithmetic overflow).",
             code="3026",
             equation=problem
         )
-
     except E.ConversionOutputError as e:
             raise E.ConversionError(
                 f"Couldnt convert result '{output_string}' into '{output_prefix}'",

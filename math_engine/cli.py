@@ -8,10 +8,7 @@ from . import (
     change_setting, load_preset, load_all_settings,
     load_one_setting, reset_settings
 )
-try:
-    import readline
-except ImportError:
-    pass
+
 
 
 def print_help():
@@ -299,7 +296,7 @@ def main():
 
     if args.expression:
         try:
-            result = evaluate_cli(args.expression)
+            result = evaluate(args.expression)
             print(result)
         except Exception as e:
             print(f"Error: {e}")

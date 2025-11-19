@@ -184,5 +184,5 @@ def validate(expr: str,
 def reset_settings():
     config_manager.reset_settings()
 # #
-# if __name__ == '__main__':
-#     print(evaluate("sin 5"))
+if __name__ == '__main__':
+    print(evaluate("0.11**0.12"))
