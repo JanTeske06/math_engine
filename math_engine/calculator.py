@@ -16,11 +16,11 @@ from decimal import Decimal, getcontext, Overflow, DivisionImpossible, InvalidOp
 import fractions
 from typing import Union
 import re
-
 from .utility import boolean, isDecimal, get_line_number, isInt, isfloat, isScOp, isOp, isolate_bracket
 from . import config_manager as config_manager
 from . import ScientificEngine
 from . import error as E
+from .plugin_manager import function_register
 from .non_decimal_utility import int_to_value, value_to_int, non_decimal_scan, apply_word_limit, setbit, bitor, bitand, bitnot, bitxor, shl, shr, clrbit, togbit, testbit
 from .AST_Node_Types import Number, BinOp, Variable
 
@@ -77,6 +77,22 @@ FUNCTION_STARTS_OPTIMIZED = {
     for start_str, token in RAW_FUNCTION_MAP.items()
 }
 
+
+def update_function_globals():
+    global RAW_FUNCTION_MAP
+    global PURE_FUNCTION_NAMES
+    global FUNCTION_STARTS_OPTIMIZED
+
+    PURE_FUNCTION_NAMES.clear()
+    for start_str, token in RAW_FUNCTION_MAP.items():
+        if start_str.endswith('('):
+            PURE_FUNCTION_NAMES.add(token)
+
+    FUNCTION_STARTS_OPTIMIZED.clear()
+    for start_str, token in RAW_FUNCTION_MAP.items():
+        FUNCTION_STARTS_OPTIMIZED[start_str] = (token, len(start_str))
+
+
 def translator(problem, custom_variables, settings):
     """Convert raw input string into a token list (numbers, ops, parens, variables, functions).
 
@@ -84,6 +100,18 @@ def translator(problem, custom_variables, settings):
     - Inserts implicit multiplication where needed (e.g., '5x' -> '5', '*', 'var0').
     - Maps '≈' to '=' so the rest of the pipeline can handle equality uniformly.
     """
+    global RAW_FUNCTION_MAP
+    if function_register:
+        function_name_key = list(function_register.keys())[0]
+        function_name_pure = function_name_key.rstrip("(")
+
+        # 1. RAW_FUNCTION_MAP aktualisieren
+        if function_name_key not in RAW_FUNCTION_MAP:
+            RAW_FUNCTION_MAP[function_name_key] = function_name_pure
+
+            # 2. Globale Abhängigkeiten aktualisieren
+            update_function_globals()
+            print("Globale Funktionsregister nach Plugin-Registrierung aktualisiert.")
     var_counter = 0
     var_list = [None] * len(problem)  # Track seen variable symbols → var0, var1, ...
     full_problem = []

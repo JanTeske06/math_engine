@@ -2,6 +2,16 @@ import argparse
 import sys
 import shlex
 import ast
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.text import Text
+from prompt_toolkit import PromptSession
+from prompt_toolkit.completion import WordCompleter, NestedCompleter
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.styles import Style
+
+# Deine internen Importe (beibehalten)
 from . import (
     evaluate, error, __version__,
     set_memory, delete_memory, show_memory,
@@ -9,58 +19,56 @@ from . import (
     load_one_setting, reset_settings
 )
 
+console = Console()
+
+
+def print_dict_as_table(title, data, key_label="Key", val_label="Value"):
+    if not data:
+        console.print(f"[yellow]No {title.lower()} found.[/yellow]")
+        return
+
+    table = Table(title=title, show_header=True, header_style="bold magenta")
+    table.add_column(key_label, style="cyan", no_wrap=True)
+    table.add_column(val_label, style="green")
+
+    for k, v in data.items():
+        table.add_row(str(k), str(v))
+
+    console.print(table)
 
 
 def print_help():
-    print("\n=== Math Engine Commands ===")
-    print("  help                       Show this help")
-    print("  settings                   Show all current settings")
-    print("  mem                        Show memory variables")
-    print("  del mem <key> | all        Deletes specified memory variable")
-    print("  load preset <dict>         Loads settings preset")
-    print("  reset settings             Reset all settings to default")
-    print("  reset mem                  Deletes all memory variables")
-    print("  set setting <key> <val>    Change a setting (e.g., 'set setting decimal_places 4')")
-    print("  set mem <key> <val>        Change / Create memory variables")
-    print("  quit / exit                Exit the shell")
-    print("============================\n")
+    """Zeigt Hilfe in einem Panel an"""
+    help_text = """
+[bold]Commands:[/bold]
+  [cyan]help[/cyan]                       Show this help
+  [cyan]settings[/cyan]                   Show all current settings
+  [cyan]mem[/cyan]                        Show memory variables
+  [cyan]del mem <key> | all[/cyan]        Delete memory variable
+  [cyan]load preset <dict>[/cyan]         Load settings preset
+  [cyan]reset settings | mem[/cyan]       Reset settings or memory
+  [cyan]set setting <key> <val>[/cyan]    Change a setting
+  [cyan]set mem <key> <val>[/cyan]        Set memory variable
+  [cyan]exit / quit[/cyan]                Exit the shell
+    """
+    console.print(Panel(help_text.strip(), title="Math Engine Commands", expand=False))
 
 
-def print_help_mem():
-    print("\n=== Math Engine Memory Commands ===")
-    print("  mem                        Show memory variables")
-    print("  del mem <key> | all        Deletes specified memory variable")
-    print("  reset mem                  Deletes all memory variables")
-    print("  set mem <key> <val>        Change / Create memory variables")
-    print("============================\n")
-
-
-def print_help_settings():
-    print("\n=== Math Engine Settings Commands ===")
-    print("  settings                   Show all current settings")
-    print("  load preset <dict>         Loads settings preset")
-    print("  reset settings             Reset all settings to default")
-    print("  set setting <key> <val>    Change a setting (e.g., 'set setting decimal_places 4')")
-    print("============================\n")
-
-
-# --- Command Handlers ---
 
 def handle_set_command(args):
     if not args:
-        print("Error: Missing subcommand. Use 'set setting' or 'set mem'.")
+        console.print("[red]Error: Missing subcommand. Use 'set setting' or 'set mem'.[/red]")
         return
 
     sub_command = args[0].lower()
 
     if sub_command == "setting":
         if len(args) < 3:
-            print("Usage: set setting <key> <value>")
+            console.print("Usage: [yellow]set setting <key> <value>[/yellow]")
             return
+        key, val_str = args[1], args[2]
 
-        key = args[1]
-        val_str = args[2]
-
+        # Einfache Typ-Konvertierung
         if val_str.lower() in ["true", "on"]:
             value = True
         elif val_str.lower() in ["false", "off"]:
@@ -72,179 +80,72 @@ def handle_set_command(args):
 
         try:
             change_setting(key, value)
-            print(f"Setting updated: {key} -> {value}")
+            console.print(f"[green]Setting updated:[/green] {key} -> {value}")
         except Exception as e:
-            print(f"Error changing setting: {e}")
+            console.print(f"[red]Error changing setting:[/red] {e}")
 
     elif sub_command == "mem":
         if len(args) < 3:
-            print("Usage: set mem <key> <value>")
+            console.print("Usage: [yellow]set mem <key> <value>[/yellow]")
             return
-
-        key = args[1]
-        val_str = args[2]
-
+        key, val_str = args[1], args[2]
         try:
             set_memory(key, val_str)
-            print(f"Memory updated: {key} = {val_str}")
+            console.print(f"[green]Memory updated:[/green] {key} = {val_str}")
         except Exception as e:
-            print(f"Error setting memory: {e}")
-
-    else:
-        print(f"Unknown set command: '{sub_command}'. Use 'setting' or 'mem'.")
+            console.print(f"[red]Error setting memory:[/red] {e}")
 
 
 def handle_del_command(args):
     if not args or args[0].lower() != "mem":
-        print("Usage: del mem <key> OR del mem all")
+        console.print("Usage: [yellow]del mem <key> OR del mem all[/yellow]")
         return
-
     if len(args) < 2:
-        print("Missing key. Usage: del mem <key>")
+        console.print("Missing key. Usage: del mem <key>")
         return
 
     target = args[1]
-
-    if target.lower() == "all":
-        try:
+    try:
+        if target.lower() == "all":
             delete_memory("all")
-            print("Memory cleared.")
-        except Exception as e:
-            print(f"Error clearing memory: {e}")
-    else:
-        try:
+            console.print("[bold red]Memory cleared.[/bold red]")
+        else:
             delete_memory(target)
-            print(f"Deleted variable: {target}")
-        except Exception as e:
-            print(f"Error: {e}")
+            console.print(f"Deleted variable: [bold]{target}[/bold]")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
 
 
 def handle_reset_command(args):
     if not args:
-        print("Usage: reset settings OR reset mem")
+        console.print("Usage: reset settings OR reset mem")
         return
-
     target = args[0].lower()
-
     if target == "settings":
         reset_settings()
-        print("All settings reset to defaults.")
-
+        console.print("[green]All settings reset to defaults.[/green]")
     elif target == "mem":
         try:
             delete_memory("all")
-            print("All memory variables deleted.")
+            console.print("[green]All memory variables deleted.[/green]")
         except Exception as e:
-            print(f"Error resetting memory: {e}")
-    else:
-        print(f"Unknown reset target: '{target}'")
+            console.print(f"[red]Error:[/red] {e}")
 
 
 def handle_load_command(args):
     if not args or args[0].lower() != "preset":
-        print("Usage: load preset <dict>")
+        console.print("Usage: load preset <dict>")
         return
-
-    if len(args) < 2:
-        print("Missing dictionary. Usage: load preset {'decimal_places': 4}")
-        return
-
-    dict_str = " ".join(args[1:])
-
     try:
+        dict_str = " ".join(args[1:])
         preset_dict = ast.literal_eval(dict_str)
         if not isinstance(preset_dict, dict):
-            print("Error: Input must be a dictionary like {'key': value}")
+            console.print("[red]Error: Input must be a dictionary[/red]")
             return
-
         load_preset(preset_dict)
-        print("Preset loaded successfully.")
-
+        console.print("[green]Preset loaded successfully.[/green]")
     except Exception as e:
-        print(f"Error loading preset: {e}")
-        print("Make sure to use valid syntax, e.g.: load preset {'decimal_places': 4}")
-
-
-# --- Main Loop ---
-
-def run_interactive_mode():
-    print(f"Math Engine {__version__} Interactive Shell")
-    print("Type 'help' for commands, 'exit' to leave.")
-
-    while True:
-        try:
-            user_input = input(">>> ").strip()
-            if not user_input:
-                continue
-
-            parts = shlex.split(user_input)
-            command = parts[0].lower()
-            args = parts[1:]
-
-            # --- Dispatcher ---
-
-            if command in ["exit", "quit"]:
-                break
-
-            elif command == "help":
-                # Sub-Help Support
-                if args and args[0] == "mem":
-                    print_help_mem()
-                elif args and args[0] == "settings":
-                    print_help_settings()
-                else:
-                    print_help()
-                continue
-
-            elif command == "settings":
-                current = load_all_settings()
-                print("\nCurrent Settings:")
-                for k, v in current.items():
-                    print(f"  {k}: {v}")
-                print()
-                continue
-
-            elif command == "mem":
-                mem_data = show_memory()
-                print("\nMemory:")
-                if not mem_data:
-                    print("  (empty)")
-                else:
-                    if isinstance(mem_data, dict):
-                        for k, v in mem_data.items():
-                            print(f"  {k} = {v}")
-                    else:
-                        print(mem_data)
-                print()
-                continue
-
-            elif command == "set":
-                handle_set_command(args)
-                continue
-
-            elif command == "del":
-                handle_del_command(args)
-                continue
-
-            elif command == "reset":
-                handle_reset_command(args)
-                continue
-
-            elif command == "load":
-                handle_load_command(args)
-                continue
-
-            result = process_input_and_evaluate(user_input)
-            if result != None:
-                print(result)
-
-        except (KeyboardInterrupt, EOFError):
-            print("\nGoodbye!")
-            break
-        except error.MathError as e:
-            print(f"Error {e.code}: {e.message}")
-        except Exception as e:
-            print(f"Error: {e}")
+        console.print(f"[red]Error loading preset:[/red] {e}")
 
 
 def process_input_and_evaluate(user_input):
@@ -285,21 +186,101 @@ def process_input_and_evaluate(user_input):
             temp_vars[key] = val
     return evaluate(expression, **temp_vars, is_cli=True)
 
-# --- Entry Point ---
+
+def run_interactive_mode():
+    console.clear()
+    console.print(f"[bold blue]Math Engine {__version__} Interactive Shell[/bold blue]")
+    console.print("Type [bold]help[/bold] for commands, [bold]exit[/bold] to leave.\n")
+
+    completer = NestedCompleter.from_nested_dict({
+        'help': {'mem': None, 'settings': None},
+        'mem': None,
+        'settings': None,
+        'del': {'mem': {'all': None}},
+        'reset': {'mem': None, 'settings': None},
+        'load': {'preset': None},
+        'set': {
+            'mem': None,
+            'setting': None
+        },
+        'exit': None,
+        'quit': None
+    })
+
+    session = PromptSession(
+        history=FileHistory(".math_engine_history"),
+        completer=completer
+    )
+
+    style = Style.from_dict({
+        'prompt': 'ansicyan bold',
+    })
+
+    while True:
+        try:
+            user_input = session.prompt('>>> ', style=style).strip()
+
+            if not user_input:
+                continue
+
+            parts = shlex.split(user_input)
+            command = parts[0].lower()
+            args = parts[1:]
+
+            if command in ["exit", "quit"]:
+                break
+
+            elif command == "help":
+                print_help()
+
+            elif command == "settings":
+                current = load_all_settings()
+                print_dict_as_table("Current Settings", current, "Setting", "Value")
+
+            elif command == "mem":
+                mem_data = show_memory()
+                if isinstance(mem_data, dict):
+                    print_dict_as_table("Memory", mem_data, "Variable", "Value")
+                else:
+                    console.print(f"[italic]{mem_data}[/italic]")
+
+            elif command == "set":
+                handle_set_command(args)
+            elif command == "del":
+                handle_del_command(args)
+            elif command == "reset":
+                handle_reset_command(args)
+            elif command == "load":
+                handle_load_command(args)
+
+            else:
+                # Mathe
+                try:
+                    result = process_input_and_evaluate(user_input)
+                    if result is not None:
+                        console.print(f"[bold green]= {result}[/bold green]")
+                except Exception as e:
+                    console.print(f"[bold red]Math Error:[/bold red] {e}")
+
+        except (KeyboardInterrupt, EOFError):
+            console.print("\n[yellow]Goodbye![/yellow]")
+            break
+        except Exception as e:
+            console.print(f"[bold red]System Error:[/bold red] {e}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="Math Engine CLI")
     parser.add_argument("expression", nargs="?", help="Expression to evaluate")
-    parser.add_argument("-v", "--version", action="version", version=f"Math Engine {__version__}")
 
     args = parser.parse_args()
 
     if args.expression:
         try:
             result = evaluate(args.expression)
-            print(result)
+            console.print(result)
         except Exception as e:
-            print(f"Error: {e}")
+            console.print(f"[bold red]Error:[/bold red] {e}")
             sys.exit(1)
     else:
         run_interactive_mode()

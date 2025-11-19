@@ -59,6 +59,9 @@ class ConversionOutputError(MathError):
 class ConfigError(MathError):
     pass
 
+class PluginError(MathError):
+    pass
+
 
 # ---------------------------------------------------------------------------
 # Error families (first digit) for quick categorization in logs/telemetry.
@@ -73,7 +76,8 @@ Error_Dictionary = {
     "5": "Configuration Error",
     "6": "Communication Error",
     "7": "Runtime Error",
-    "8" : "Conversion Error"
+    "8" : "Conversion Error",
+    "9" : "Plugin Error"
 }
 
 # Error code structure:
@@ -158,6 +162,20 @@ ERROR_MESSAGES = {
     "8007": "Failed Bit Operation",
     "8008": "Comma in BitNot",
 
-    # 9xxx — catch-all
+    # 9xxx — Plugin Error
+    "9000" : "Registered function is not a dict.",
+    "9001" : "Too many keys in function",
+    "9002" : "Wrong registered type",
+    "9003" : "Invalid value type",
+    "9004" : "Invalid Divider.",
+    "9005" : "Couldnt find referenced class",
+    "9006" : "Class not child from BasePlugin",
+    "9007" : "Error loading plugin",
+    "9008" : "Instancing Error",
+    "9009" : "register_function not found",
+    "9010" : "register_function raised an error",
+    "9011" : "Function cant end with ')'",
+
+    # 9999 catch all
     "9999": "Unexpected Error: ",                # + error
 }

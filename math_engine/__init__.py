@@ -4,7 +4,7 @@ import math_engine.calculator
 from . import calculator
 from . import config_manager as config_manager
 from . import error as E
-
+from . import plugin_manager
 from typing import Any, Mapping, Optional
 from typing import Union
 from typing import Any, Mapping
@@ -183,6 +183,8 @@ def validate(expr: str,
 
 def reset_settings():
     config_manager.reset_settings()
-# #
+
+
 if __name__ == '__main__':
-    print(evaluate("0.11**0.12"))
+    plugin_manager.load_plugins()
+    print(evaluate("ln(3+3)"))

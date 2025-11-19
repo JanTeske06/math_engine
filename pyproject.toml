@@ -32,3 +32,8 @@ Changelog = "https://github.com/JanTeske06/math_engine/blob/master/CHANGELOG.md"
 
 [tool.setuptools]
 include-package-data = true
+
+dependencies = [
+    "rich",
+    "prompt_toolkit"
+]
