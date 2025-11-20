@@ -31,6 +31,7 @@ debug = False
 Operations = ["+", "-", "*", "/", "=", "^", ">>", "<<", "<", ">", "|","&" ]
 Science_Operations = ["sin", "cos", "tan", "10^x", "log", "e^", "π", "√"]
 Bit_Operations = ["setbit", "bitxor", "shl", "shr", "bitnot", "bitand", "bitor", "clrbit", "togbit", "testbit"]
+plugin_operations = []
 
 # Global Decimal precision used by this module (UI may also enforce this before calls)
 getcontext().prec = 10000
@@ -101,6 +102,7 @@ def translator(problem, custom_variables, settings):
     - Maps '≈' to '=' so the rest of the pipeline can handle equality uniformly.
     """
     global RAW_FUNCTION_MAP
+    global plugin_operations
     if function_register:
         function_name_key = list(function_register.keys())[0]
         function_name_pure = function_name_key.rstrip("(")
@@ -108,6 +110,8 @@ def translator(problem, custom_variables, settings):
         # 1. RAW_FUNCTION_MAP aktualisieren
         if function_name_key not in RAW_FUNCTION_MAP:
             RAW_FUNCTION_MAP[function_name_key] = function_name_pure
+            plugin_operations.append(function_name_pure)
+
 
             # 2. Globale Abhängigkeiten aktualisieren
             update_function_globals()
@@ -524,6 +528,91 @@ def ast(received_string, settings, custom_variables):
             tokens.pop(0)
             token_spans.pop(0)
             return subtree_in_paren
+
+        elif token in plugin_operations:
+            if not tokens or tokens[0] != '(':
+                err_pos = token_spans[0][0] if token_spans else pos[1]
+                raise E.SyntaxError(f"Missing opening parenthesis after bit function {token}", code="3010",
+                                    position_start=err_pos)
+
+            tokens.pop(0)
+            l_paren_pos = token_spans.pop(0)
+
+            argument_subtree = parse_bor(tokens, token_spans)
+
+            def get_second_arg_and_close():
+                if not tokens or tokens[0] != ',':
+                    err_pos = token_spans[0][0] if token_spans else l_paren_pos[0]
+                    raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009",
+                                        position_start=err_pos)
+                tokens.pop(0)
+                token_spans.pop(0)
+
+                base_sub = parse_bor(tokens, token_spans)
+
+                if not tokens or tokens[0] != ')':
+                    raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009",
+                                        position_start=l_paren_pos[0])
+                tokens.pop(0)
+                end_pos = token_spans.pop(0)
+                return base_sub, end_pos
+
+            def close_only():
+                if not tokens or tokens[0] != ')':
+                    raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code="3009",
+                                        position_start=l_paren_pos[0])
+                tokens.pop(0)
+                token_spans.pop(0)
+                if tokens and tokens[0] == ',':
+                    err_pos = token_spans[0][0]
+                    raise E.SyntaxError(f"Comma in '{token}'", code="8008", position_start=err_pos)
+
+                if not tokens or tokens[0] != ')':
+                    err_pos = token_spans[0][0] if token_spans else pos[1] + 1
+                    raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code="3009",
+                                        position_start=err_pos)
+                tokens.pop(0)
+                end_paren_span = token_spans.pop(0)
+
+                argument_value = argument_subtree.evaluate()
+                if argument_value % 1 != 0:
+                    arg_start = argument_subtree.position_start if argument_subtree.position_start != -1 else pos[0]
+                    arg_end = argument_subtree.position_end if argument_subtree.position_end != -1 else end_paren_span[
+                        1]
+
+                    raise E.CalculationError("Bit functions require integer values.", code="3041",
+                                             position_start=arg_start, position_end=arg_end)
+
+                try:
+                    return Number(bitnot(argument_value))
+                except Exception as e:
+                    raise E.SyntaxError(f"Error in {token}: {e}", code="8007", position_start=pos[0])
+            if token == "ln":
+                if tokens and tokens[0] == ',':
+                    err_pos = token_spans[0][0]
+                    raise E.SyntaxError(f"Comma in '{token}'", code="8008", position_start=err_pos)
+
+                if not tokens or tokens[0] != ')':
+                    err_pos = token_spans[0][0] if token_spans else pos[1] + 1
+                    raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code="3009",
+                                        position_start=err_pos)
+            tokens.pop(0)
+            end_paren_span = token_spans.pop(0)
+
+            argument_value = argument_subtree.evaluate()
+            if argument_value % 1 != 0:
+                arg_start = argument_subtree.position_start if argument_subtree.position_start != -1 else pos[0]
+                arg_end = argument_subtree.position_end if argument_subtree.position_end != -1 else end_paren_span[
+                    1]
+
+                raise E.CalculationError("Bit functions require integer values.", code="3041",
+                                         position_start=arg_start, position_end=arg_end)
+
+            try:
+                return Number(bitnot(argument_value))
+            except Exception as e:
+                raise E.SyntaxError(f"Error in {token}: {e}", code="8007", position_start=pos[0])
+
 
         elif token in Science_Operations:
             if token == 'π':

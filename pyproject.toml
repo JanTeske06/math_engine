@@ -1,4 +1,3 @@
-# pyproject.toml
 [build-system]
 requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -17,23 +16,34 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+# MOVED UP: dependencies must be a direct child of [project], not [project.scripts]
+dependencies = [
+    "rich",
+    "prompt_toolkit"
+]
+
 [project.scripts]
 math-engine = "math_engine.cli:main"
 calc = "math_engine.cli:main"
 start = "math_engine.cli:main"
 
-[tool.setuptools.package-data]
-"math_engine" = ["config.json"]
-
 [project.urls]
 Homepage = "https://github.com/JanTeske06/math_engine"
 Source = "https://github.com/JanTeske06/math_engine"
-Changelog = "https://github.com/JanTeske06/math_engine/blob/master/CHANGELOG.md"  # <-- NEU
+Changelog = "https://github.com/JanTeske06/math_engine/blob/master/CHANGELOG.md"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov"
+]
+
+[tool.setuptools.package-data]
+"math_engine" = ["config.json"]
 
 [tool.setuptools]
 include-package-data = true
 
-dependencies = [
-    "rich",
-    "prompt_toolkit"
-]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py", "*_tests.py"]
