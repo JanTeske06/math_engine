@@ -20,3 +20,5 @@ class Hallo(BasePlugin):
                 "divided_by"            : ",",              # Default is ',', but can be adjusted, except '(' or ')'
                 "implementation_class"  : Hallo             # Name of ur Class
                                                         }
+    def execute(self, problem):
+        pass

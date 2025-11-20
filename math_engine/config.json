@@ -11,6 +11,6 @@
     "only_binary": false,
     "only_octal": false,
     "signed_mode": true,
-    "readable_error": true,
+    "readable_error": false,
     "word_size": 0
 }

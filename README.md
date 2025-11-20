@@ -4,6 +4,7 @@
 [![PyPI Version](https://img.shields.io/pypi/v/math-engine.svg)](https://pypi.org/project/math-engine/)
 [![License: MIT](https://img.shields.io/pypi/l/math-engine.svg)](https://opensource.org/licenses/MIT)
 [![Python Versions](https://img.shields.io/pypi/pyversions/math-engine.svg)](https://pypi.org/project/math-engine/)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/math-engine?period=total&units=NONE&left_color=GREY&right_color=BLACK&left_text=downloads)](https://pepy.tech/projects/math-engine)
 
 A fast, safe, configurable expression parser and calculator for Python.
 

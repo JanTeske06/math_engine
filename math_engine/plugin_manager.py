@@ -45,6 +45,10 @@ class BasePlugin(ABC):
         #         "implementation_class"  : BasePlugin        # Name of ur Class
         #                                                 }
 
+    @abstractmethod
+    def execute(self, problem):
+        pass
+
 
 
 
