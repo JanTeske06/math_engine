@@ -252,7 +252,10 @@ def run_interactive_mode():
                 handle_reset_command(args)
             elif command == "load":
                 handle_load_command(args)
-
+            elif command == "clear":
+                console.clear()
+                console.print(f"[bold blue]Math Engine {__version__} Interactive Shell[/bold blue]")
+                console.print("Type [bold]help[/bold] for commands, [bold]exit[/bold] to leave.\n")
             else:
                 # Mathe
                 try:
