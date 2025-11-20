@@ -47,3 +47,12 @@ include-package-data = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py", "*_tests.py"]
+
+[tool.coverage.run]
+omit = [
+    "*/__init__.py",
+
+    # WIP
+    "math_engine/plugins/*",
+    "math_engine/plugin_manager.py"
+]

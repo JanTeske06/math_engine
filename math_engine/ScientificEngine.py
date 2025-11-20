@@ -192,42 +192,6 @@ def isRoot(problem):
         return False
 
 
-def test_main():
-    """Very simple console tester for this module (manual ad-hoc checks).
-
-    Note
-    ----
-    - Diese Funktion ist nur für manuelle Tests gedacht.
-    - Es gibt hier bewusst keine Robustheit gegen fehlerhafte Eingaben.
-    - Aufruf erwartet Strings wie: "sin(1.2)", "log(10, 2)", "√(9)", "e(1)".
-    """
-    print("Enter the problem: ")
-    received_string = input()
-
-    # Hinweis: Der folgende Aufruf von isPi() ohne Argument ist eine
-    # bekannte Inkonsistenz im Testcode – belassen wie gewünscht, um
-    # KEINE Logik zu verändern.
-    if received_string == "π" or received_string.lower() == "pi":
-            ergebnis = isPi()
-
-    elif "sin" in received_string or "cos" in received_string or "tan" in received_string:
-            ergebnis = isSCT(received_string)
-
-    elif "log" in received_string:
-            ergebnis = isLog(received_string)
-
-    elif "√" in received_string:
-            ergebnis = isRoot(received_string)
-
-    elif "e" in received_string:
-            ergebnis = isE(received_string)
-
-    else:
-        ergebnis = (f"Error. Could not assign an operation. Received String:" + str(received_string))
-
-    print(ergebnis)
-
-
 def unknown_function(received_string):
     """Dispatch a received function string to the matching evaluator.
 
@@ -267,5 +231,4 @@ def unknown_function(received_string):
     return  ergebnis
 
 
-if __name__ == "__main__":
-    test_main()
+

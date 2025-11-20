@@ -187,4 +187,4 @@ def reset_settings():
 
 if __name__ == '__main__':
     plugin_manager.load_plugins()
-    print(evaluate("ln(3)"))
+    print(evaluate("1 + 1x"))

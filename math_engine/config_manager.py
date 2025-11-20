@@ -184,7 +184,7 @@ def save_setting(key_value, new_value):
     allowed_prefix = (
         "dec:", "d:", "decimal:", "int:", "i:", "integer:", "float:", "f:",
         "bool:", "bo:", "boolean:", "hex:", "h:", "hexadecimal:",
-        "str:", "s:", "string:", "bin:", "bi:", "binary:", "oc:", "o:", "octal:"
+        "str:", "s:", "string:", "bin:", "bi:", "binary:", "oc:", "o:", "octal:", "oct:"
     )
 
     new_value_str_lower = str(new_value).lower()
@@ -279,17 +279,17 @@ def load_preset(settings:dict):
     except (FileNotFoundError, json.JSONDecodeError) as e:
         raise E.ConfigError(f"Could not save configuration file: {e}", code = "5002")
 
-if __name__ == "__main__":
-    """Manual test block — for standalone verification only."""
-    print(load_setting_value("after_paste_enter"))
-
-    all_settings = load_setting_value("all")
-    all_settings["darkmode"] = True
-    save_setting(all_settings)
-    print(load_setting_value("darkmode"))
-
-    all_settings = load_setting_value("all")
-    all_settings["darkmode"] = False
-    save_setting(all_settings)
-    print(load_setting_value("darkmode"))
-    print(load_setting_value("all"))
+# if __name__ == "__main__":
+#     """Manual test block — for standalone verification only."""
+#     print(load_setting_value("after_paste_enter"))
+#
+#     all_settings = load_setting_value("all")
+#     all_settings["darkmode"] = True
+#     save_setting(all_settings)
+#     print(load_setting_value("darkmode"))
+#
+#     all_settings = load_setting_value("all")
+#     all_settings["darkmode"] = False
+#     save_setting(all_settings)
+#     print(load_setting_value("darkmode"))
+#     print(load_setting_value("all"))

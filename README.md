@@ -1,10 +1,13 @@
 
 # Math Engine v0.6.3
 
-[![PyPI Version](https://img.shields.io/pypi/v/math-engine.svg)](https://pypi.org/project/math-engine/)
-[![License: MIT](https://img.shields.io/pypi/l/math-engine.svg)](https://opensource.org/licenses/MIT)
+[![PyPI version](https://badge.fury.io/py/math-engine.svg)](https://badge.fury.io/py/math-engine)
 [![Python Versions](https://img.shields.io/pypi/pyversions/math-engine.svg)](https://pypi.org/project/math-engine/)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/math-engine?period=total&units=NONE&left_color=GREY&right_color=BLACK&left_text=downloads)](https://pepy.tech/projects/math-engine)
+[![Continuous Integration & Tests](https://github.com/JanTeske06/math_engine/actions/workflows/ci_tests.yml/badge.svg)](https://github.com/JanTeske06/math_engine/actions/workflows/ci_tests.yml)
+[![codecov](https://codecov.io/gh/JanTeske06/math_engine/graph/badge.svg)](https://codecov.io/gh/JanTeske06/math_engine)
+[![License: MIT](https://img.shields.io/pypi/l/math-engine.svg)](https://opensource.org/licenses/MIT)
+
 
 A fast, safe, configurable expression parser and calculator for Python.
 
@@ -551,7 +554,14 @@ See [CHANGELOG.md](https://github.com/JanTeske06/math_engine/blob/master/CHANGEL
 [MIT License](https://github.com/JanTeske06/math_engine/blob/master/LICENSE)
 
 -----
+# AI
 
+I want to be transparent about my workflow.
+Parts of this project, especially the README text, documentation sections, and a significant portion of the test scaffolding, were created with the help of AI tools.
+
+All architecture decisions, design choices, algorithms, implementations, refactorings, and debugging were done by me personally. AI served purely as a productivity aid: helping me improve clarity, expand test coverage faster, and polish documentation.
+
+---
 # Contributing
 
 Contributions are welcome.

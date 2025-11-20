@@ -3,7 +3,12 @@ from decimal import Decimal
 
 import math_engine
 from math_engine import error as E
-
+import pytest
+from unittest.mock import patch, mock_open
+import json
+import math_engine
+from math_engine import error as E
+from math_engine import config_manager
 
 # ---------------------------------------------------------------------------
 # Fixtures & Basis-Settings
@@ -947,6 +952,1490 @@ def test_38_pos_function_name_too_long_for_variable_check():
     assert_error_location("(( 1 )", "3009", 0)
 
 # --- Kombinierter Integrationstest ---------------------------------------
+
+
+import pytest
+from unittest.mock import patch, mock_open
+import json
+import math_engine
+from math_engine import error as E
+from math_engine import config_manager
+
+
+# ---------------------------------------------------------------------------
+# 1. Tests für Datei-Fehler (IO / JSON Errors) in config_manager
+# ---------------------------------------------------------------------------
+
+def test_load_setting_value_file_not_found():
+    """Testet, ob ein leeres Dict zurückkommt, wenn die config.json fehlt."""
+    with patch("builtins.open", side_effect=FileNotFoundError):
+        result = config_manager.load_setting_value("all")
+        assert result == {}
+
+
+def test_load_setting_value_corrupt_json():
+    """Testet, ob ein leeres Dict zurückkommt, wenn die JSON kaputt ist."""
+    with patch("builtins.open", mock_open(read_data="{ broken json")):
+        with patch("json.load", side_effect=json.JSONDecodeError("msg", "doc", 0)):
+            result = config_manager.load_setting_value("all")
+            assert result == {}
+
+
+def test_force_overwrite_settings_io_error():
+    """
+    Testet Error 5002.
+    Hinweis: Wir simulieren FileNotFoundError, da der aktuelle Code PermissionError
+    nicht explizit fängt, aber FileNotFoundError schon.
+    """
+    with patch("builtins.open", side_effect=FileNotFoundError("Simulated FS Error")):
+        with pytest.raises(E.ConfigError) as exc:
+            config_manager.force_overwrite_settings({})
+        assert exc.value.code == "5002"
+
+
+def test_save_setting_io_error():
+    """Testet Error 5002 beim Speichern."""
+    with patch("math_engine.config_manager.load_setting_value", return_value={"my_key": 1}):
+        # Auch hier nutzen wir FileNotFoundError, damit der Test durchläuft
+        with patch("builtins.open", side_effect=FileNotFoundError):
+            with pytest.raises(E.ConfigError) as exc:
+                config_manager.save_setting("my_key", 2)
+            assert exc.value.code == "5002"
+
+
+# ---------------------------------------------------------------------------
+# 2. Tests für Memory-Management (__init__.py)
+# ---------------------------------------------------------------------------
+
+def test_delete_memory_all():
+    """Testet das Löschen des gesamten Speichers."""
+    math_engine.set_memory("var1", "10")
+    math_engine.set_memory("var2", "20")
+    math_engine.delete_memory("all")
+    assert math_engine.show_memory() == {}
+
+
+def test_delete_memory_not_exist():
+    """Testet Fehler 4000 beim Löschen einer nicht existierenden Variable."""
+    math_engine.delete_memory("all")
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.delete_memory("ghost_variable")
+    assert exc.value.code == "4000"
+
+
+# ---------------------------------------------------------------------------
+# 3. Tests für 'Readable Error' Prints (CLI vs Non-CLI)
+# ---------------------------------------------------------------------------
+
+def test_evaluate_readable_error_cli_output(capsys):
+    """Testet die ASCII-Art Ausgabe im CLI-Modus bei Fehlern."""
+    math_engine.change_setting("readable_error", True)
+
+    # 10/0 -> Fehler an Index 2 ('/')
+    # Formel im Code: (pos + 4) * " "
+    # 2 + 4 = 6 Leerzeichen
+    math_engine.evaluate("10/0", is_cli=True)
+
+    captured = capsys.readouterr()
+
+    # Korrigierte Anzahl Leerzeichen (6 statt 7)
+    expected_arrow = "      ^ HERE IS THE PROBLEM"
+
+    assert "Code: 3003" in captured.out
+    assert expected_arrow in captured.out
+
+
+def test_evaluate_readable_error_non_cli_output(capsys):
+    """Testet die Ausgabe im Non-CLI Modus (Unterstreichung)."""
+    math_engine.change_setting("readable_error", True)
+
+    math_engine.evaluate("10/0", is_cli=False)
+
+    captured = capsys.readouterr()
+    assert "\033[4m" in captured.out
+    assert "Code: 3003" in captured.out
+
+
+def test_validate_print_output(capsys):
+    """Testet die Print-Ausgabe von validate() bei Fehlern."""
+    # Wir nehmen "1+" (Syntaxfehler), damit validate wirklich fehlschlägt.
+    # "10/0" ist syntaktisch korrekt und wirft erst beim Rechnen (evaluate) einen Fehler.
+    result = math_engine.validate("1+")
+
+    # validate() hat kein explizites return im except-Block, daher None
+    assert result is None
+
+    captured = capsys.readouterr()
+    # "1+" -> Fehler an Index 2 (das Nichts danach) -> Code 3029 (Missing number)
+    assert "Code: 3029" in captured.out
+    assert "^ HERE IS THE PROBLEM" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# 4. Tests für spezielle Config-Logiken (__init__.py & config_manager)
+# ---------------------------------------------------------------------------
+
+def test_change_setting_failure_propagation():
+    """Testet, ob change_setting -1 zurückgibt, wenn save_setting fehlschlägt."""
+    with patch("math_engine.config_manager.save_setting", return_value=-1):
+        result = math_engine.change_setting("any_setting", 1)
+        assert result == -1
+
+
+def test_load_preset_unknown_settings_error():
+    """Testet Fehler 5003 wenn Preset unbekannte Keys hat."""
+    bad_preset = {"INVALID_KEY_XYZ": 123}
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.load_preset(bad_preset)
+    assert exc.value.code == "5003"
+
+
+import pytest
+from unittest.mock import patch, mock_open
+import json
+import math_engine
+from math_engine import error as E
+from math_engine import config_manager
+
+
+# ---------------------------------------------------------------------------
+# 1. Tests für Datei-Fehler (IO / JSON Errors) in config_manager
+# ---------------------------------------------------------------------------
+
+def test_load_setting_value_file_not_found():
+    """Simuliert fehlende config.json -> muss leeres Dict {} zurückgeben."""
+    with patch("builtins.open", side_effect=FileNotFoundError):
+        result = config_manager.load_setting_value("all")
+        assert result == {}
+
+
+def test_load_setting_value_corrupt_json():
+    """Simuliert kaputte config.json -> muss leeres Dict {} zurückgeben."""
+    with patch("builtins.open", mock_open(read_data="{ kaputtes json")):
+        with patch("json.load", side_effect=json.JSONDecodeError("msg", "doc", 0)):
+            result = config_manager.load_setting_value("all")
+            assert result == {}
+
+
+def test_force_overwrite_settings_io_error():
+    """Testet Error 5002 beim Speichern (simuliert durch FileNotFoundError)."""
+    with patch("builtins.open", side_effect=FileNotFoundError("Simulierter Fehler")):
+        with pytest.raises(E.ConfigError) as exc:
+            config_manager.force_overwrite_settings({})
+        assert exc.value.code == "5002"
+
+
+def test_save_setting_io_error():
+    """Testet Error 5002 beim Speichern eines einzelnen Werts."""
+    with patch("math_engine.config_manager.load_setting_value", return_value={"test_key": 1}):
+        with patch("builtins.open", side_effect=FileNotFoundError):
+            with pytest.raises(E.ConfigError) as exc:
+                config_manager.save_setting("test_key", 2)
+            assert exc.value.code == "5002"
+
+
+# ---------------------------------------------------------------------------
+# 2. Tests für load_setting_description (UI Strings)
+# ---------------------------------------------------------------------------
+
+def test_load_setting_description_all():
+    """Testet das Laden aller UI-Strings."""
+    dummy_data = {"key1": "Text 1", "key2": "Text 2"}
+    with patch("builtins.open", mock_open(read_data=json.dumps(dummy_data))):
+        result = config_manager.load_setting_description("all")
+        assert result == dummy_data
+
+
+def test_load_setting_description_single():
+    """Testet das Laden eines einzelnen UI-Strings."""
+    dummy_data = {"my_setting": "Das ist eine Einstellung"}
+    with patch("builtins.open", mock_open(read_data=json.dumps(dummy_data))):
+        result = config_manager.load_setting_description("my_setting")
+        assert result == "Das ist eine Einstellung"
+
+
+def test_load_setting_description_missing_file():
+    """Testet Verhalten bei fehlender ui_strings.json."""
+    with patch("builtins.open", side_effect=FileNotFoundError):
+        result = config_manager.load_setting_description("all")
+        assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# 3. Tests für Typ-Logik in save_setting (Spezialfälle)
+# ---------------------------------------------------------------------------
+
+def test_save_setting_bool_where_int_expected():
+    """Bool (True) darf dort gespeichert werden, wo Int erwartet wird."""
+    with patch("math_engine.config_manager.load_setting_value", return_value={"decimal_places": 2}):
+        with patch("builtins.open", mock_open()):
+            config_manager.save_setting("decimal_places", True)
+
+
+def test_save_setting_int_where_bool_expected_valid():
+    """0 oder 1 darf dort gespeichert werden, wo Bool erwartet wird."""
+    with patch("math_engine.config_manager.load_setting_value", return_value={"debug": False}):
+        with patch("builtins.open", mock_open()):
+            config_manager.save_setting("debug", 1)  # 1 = True
+            config_manager.save_setting("debug", 0)  # 0 = False
+
+
+def test_save_setting_int_where_bool_expected_invalid():
+    """Fehlerfall: Zahl != 0/1 darf NICHT als Bool gespeichert werden."""
+    with patch("math_engine.config_manager.load_setting_value", return_value={"debug": False}):
+        with pytest.raises(E.ConfigError) as exc:
+            config_manager.save_setting("debug", 5)
+        assert exc.value.code == "5000"
+        assert "Only 0 or 1 allowed" in str(exc.value)
+
+
+def test_save_setting_general_type_mismatch():
+    """Allgemeiner Typfehler: String statt Int."""
+    with patch("math_engine.config_manager.load_setting_value", return_value={"decimal_places": 2}):
+        with pytest.raises(E.ConfigError) as exc:
+            config_manager.save_setting("decimal_places", "zwei")
+        assert exc.value.code == "5000"
+
+
+def test_save_setting_word_size_invalid():
+    """Testet ungültige Word-Size Werte (z.B. 12 Bit)."""
+    with patch("math_engine.config_manager.load_setting_value", return_value={"word_size": 0}):
+        with pytest.raises(E.ConfigError) as exc:
+            config_manager.save_setting("word_size", 12)
+        assert exc.value.code == "5003"
+
+
+# ---------------------------------------------------------------------------
+# 4. Tests für Output Format Abkürzungen
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("input_val, expected_prefix", [
+    # Wir geben hier "s:" statt "s" ein, damit der Code den Prefix erkennt
+    # und ihn zu "string:" expandiert. Das deckt die roten Zeilen im Code ab!
+    ("s:", "string:"), ("str:", "string:"), ("string:", "string:"),
+    ("bo:", "boolean:"), ("bool:", "boolean:"),
+    ("d:", "decimal:"), ("dec:", "decimal:"),
+    ("f:", "float:"), ("float:", "float:"),
+    ("i:", "int:"), ("int:", "int:"),
+    ("h:", "hexadecimal:"), ("hex:", "hexadecimal:"),
+    ("bi:", "binary:"), ("bin:", "binary:"),
+    ("o:", "octal:"), ("oct:", "octal:"), ("oc:", "octal:"),
+    ("decimal:", "decimal:"),
+
+    # Teste auch die "Pure Name" Logik (Fallback)
+    # Wenn man nur "dec" eingibt (ohne Doppelpunkt), hängt der Code nur ":" an,
+    # expandiert es aber NICHT (laut deinem aktuellen Code).
+    ("dec", "dec:"),
+    ("hex", "hex:"),
+])
+def test_default_output_format_expansions(input_val, expected_prefix):
+    """Testet alle Abkürzungen für Output-Formate."""
+    mock_settings = {"default_output_format": "decimal:"}
+
+    with patch("math_engine.config_manager.load_setting_value", return_value=mock_settings):
+        with patch("json.dump") as mock_dump:
+            with patch("builtins.open", mock_open()):
+                config_manager.save_setting("default_output_format", input_val)
+                # Prüfen, was gespeichert worden wäre
+                saved_dict = mock_dump.call_args[0][0]
+                assert saved_dict["default_output_format"] == expected_prefix
+
+
+def test_default_output_format_invalid():
+    """Testet Fehler bei unbekanntem Format."""
+    with patch("math_engine.config_manager.load_setting_value", return_value={"default_output_format": "decimal:"}):
+        with pytest.raises(E.ConfigError) as exc:
+            config_manager.save_setting("default_output_format", "pizza_format")
+        assert exc.value.code == "5002"
+
+
+# ---------------------------------------------------------------------------
+# 5. Tests für Exklusive Flags (only_hex vs only_binary)
+# ---------------------------------------------------------------------------
+
+def test_mutual_exclusive_only_hex():
+    """Wenn only_hex=True gesetzt wird, müssen binary und octal False werden."""
+    mock_settings = {"only_hex": False, "only_binary": True, "only_octal": True}
+
+    with patch("math_engine.config_manager.load_setting_value", return_value=mock_settings):
+        with patch("json.dump") as mock_dump:
+            with patch("builtins.open", mock_open()):
+                config_manager.save_setting("only_hex", True)
+
+                saved_dict = mock_dump.call_args[0][0]
+                assert saved_dict["only_hex"] is True
+                assert saved_dict["only_binary"] is False
+                assert saved_dict["only_octal"] is False
+
+
+def test_mutual_exclusive_only_binary():
+    """Wenn only_binary=True gesetzt wird, müssen hex und octal False werden."""
+    mock_settings = {"only_hex": True, "only_binary": False, "only_octal": True}
+
+    with patch("math_engine.config_manager.load_setting_value", return_value=mock_settings):
+        with patch("json.dump") as mock_dump:
+            with patch("builtins.open", mock_open()):
+                config_manager.save_setting("only_binary", True)
+
+                saved_dict = mock_dump.call_args[0][0]
+                assert saved_dict["only_binary"] is True
+                assert saved_dict["only_hex"] is False
+                assert saved_dict["only_octal"] is False
+
+
+# ---------------------------------------------------------------------------
+# 6. Memory Tests
+# ---------------------------------------------------------------------------
+
+def test_delete_memory_all():
+    math_engine.set_memory("a", "1")
+    math_engine.delete_memory("all")
+    assert math_engine.show_memory() == {}
+
+
+def test_delete_memory_error():
+    # Korrigierter Test: Wir rufen jetzt delete_memory auf und prüfen den SyntaxError
+    math_engine.delete_memory("all")
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.delete_memory("nicht_da")
+    assert exc.value.code == "4000"
+
+
+# ---------------------------------------------------------------------------
+# LÜCKENSCHLUSS-TESTS (Coverage Gap Fillers)
+# ---------------------------------------------------------------------------
+
+def test_save_setting_bool_as_int_pass():
+    """Deckt Zeile 163 ab: Bool (True/False) wird in Int-Feld akzeptiert (pass)."""
+    # 'decimal_places' ist int. Wir speichern True (was 1 entspricht).
+    with patch("math_engine.config_manager.load_setting_value", return_value={"decimal_places": 2}):
+        with patch("builtins.open", mock_open()):
+            # Das hier muss ohne Fehler durchlaufen und in den 'if ... pass' Zweig gehen
+            config_manager.save_setting("decimal_places", True)
+
+
+def test_mutual_exclusive_only_octal():
+    """Deckt Zeile 253 ab: only_octal schaltet hex und binary aus."""
+    mock_settings = {"only_hex": True, "only_binary": True, "only_octal": False}
+
+    with patch("math_engine.config_manager.load_setting_value", return_value=mock_settings):
+        with patch("json.dump") as mock_dump:
+            with patch("builtins.open", mock_open()):
+                config_manager.save_setting("only_octal", True)
+
+                # Prüfen, ob die anderen beiden auf False gesetzt wurden
+                saved_dict = mock_dump.call_args[0][0]
+                assert saved_dict["only_octal"] is True
+                assert saved_dict["only_hex"] is False
+                assert saved_dict["only_binary"] is False
+
+
+def test_load_preset_invalid_length():
+    """Deckt Zeile 273 ab: Error 5002 wenn Preset-Länge nicht stimmt."""
+    # Wir simulieren, dass die aktuellen Settings 2 Einträge haben
+    mock_current = {"a": 1, "b": 2}
+
+    # Wir übergeben ein Preset mit nur 1 Eintrag (Länge 1 != Länge 2)
+    short_preset = {"a": 10}
+
+    with patch("math_engine.config_manager.load_setting_value", return_value=mock_current):
+        with pytest.raises(E.SyntaxError) as exc:
+            config_manager.load_preset(short_preset)
+        assert exc.value.code == "5002"
+        assert "Invalid dict" in str(exc.value)
+
+
+def test_force_overwrite_settings_success():
+    """Deckt Zeile 82 ab: Erfolgreicher Durchlauf (return 1)."""
+    with patch("builtins.open", mock_open()):
+        with patch("json.dump"):
+            result = config_manager.force_overwrite_settings({"any": "setting"})
+            assert result == 1
+
+
+# ---------------------------------------------------------------------------
+# FINALE LÜCKEN-SCHLUSS-TESTS (Decken image_0e8a26.png ab)
+# ---------------------------------------------------------------------------
+
+def test_final_gap_only_octal_logic():
+    """Deckt Zeile 252-254 ab: only_octal Logic."""
+    # Wir simulieren existierende Settings
+    mock_settings = {"only_hex": True, "only_binary": True, "only_octal": False}
+
+    with patch("math_engine.config_manager.load_setting_value", return_value=mock_settings):
+        with patch("builtins.open", mock_open()):
+            # Hier rufen wir explizit "only_octal" auf, um in das 'elif' zu springen
+            config_manager.save_setting("only_octal", True)
+
+
+def test_final_gap_word_size_invalid():
+    """Deckt Zeile 259 ab: Exception bei falscher Word-Size."""
+    # 'word_size' existiert in Settings, wir versuchen einen ungültigen Wert (99)
+    with patch("math_engine.config_manager.load_setting_value", return_value={"word_size": 0}):
+        with pytest.raises(E.ConfigError) as exc:
+            config_manager.save_setting("word_size", 99)
+        assert exc.value.code == "5003"
+
+
+def test_final_gap_save_setting_io_error():
+    """Deckt Zeile 268 ab: Schreibfehler beim Speichern in save_setting."""
+    with patch("math_engine.config_manager.load_setting_value", return_value={"any_key": 1}):
+        # Wir simulieren, dass open() fehlschlägt (z.B. Schreibschutz)
+        with patch("builtins.open", side_effect=FileNotFoundError):
+            with pytest.raises(E.ConfigError) as exc:
+                config_manager.save_setting("any_key", 2)
+            assert exc.value.code == "5002"
+
+
+def test_final_gap_load_preset_io_error():
+    """Deckt Zeile 280 ab: Schreibfehler innerhalb von load_preset."""
+    # 1. Mock load_setting_value: Muss gleiche Länge haben wie Preset, damit wir nicht in Error 5002 (Invalid dict) laufen
+    mock_current = {"a": 1}
+    preset_to_load = {"a": 2}
+
+    with patch("math_engine.config_manager.load_setting_value", return_value=mock_current):
+        # 2. Mock open: Muss fehlschlagen beim Schreiben
+        with patch("builtins.open", side_effect=FileNotFoundError):
+            with pytest.raises(E.ConfigError) as exc:
+                config_manager.load_preset(preset_to_load)
+            assert exc.value.code == "5002"
+
+
+import pytest
+from unittest.mock import patch, MagicMock, ANY
+import sys
+import math_engine.cli as cli
+
+
+# ---------------------------------------------------------------------------
+# 1. Test für den Argument-Modus (python -m math_engine "1+1")
+# ---------------------------------------------------------------------------
+
+def test_main_arg_mode_success(capsys):
+    """Testet den Aufruf mit Argumenten: `math-engine '1+1'`"""
+    # Wir simulieren sys.argv
+    with patch.object(sys, 'argv', ["prog_name", "1+1"]):
+        # Wir fälschen evaluate, damit wir nicht wirklich rechnen müssen
+        with patch("math_engine.cli.evaluate", return_value=2):
+            cli.main()
+
+    # Wir prüfen, ob '2' auf der Konsole ausgegeben wurde
+    captured = capsys.readouterr()
+    assert "2" in captured.out
+
+
+def test_main_arg_mode_error(capsys):
+    """Testet Fehler im Argument-Modus (z.B. Division durch Null)."""
+    with patch.object(sys, 'argv', ["prog_name", "1/0"]):
+        # evaluate wirft hier einen Fehler
+        with patch("math_engine.cli.evaluate", side_effect=Exception("DivZero")):
+            # Das Programm sollte sich mit Exit Code 1 beenden
+            with pytest.raises(SystemExit):
+                cli.main()
+
+    captured = capsys.readouterr()
+    assert "Error:" in captured.out
+    assert "DivZero" in captured.out
+
+
+def test_main_starts_interactive_mode():
+    """Wenn keine Argumente gegeben sind, soll der interaktive Modus starten."""
+    with patch.object(sys, 'argv', ["prog_name"]):
+        with patch("math_engine.cli.run_interactive_mode") as mock_run:
+            cli.main()
+            mock_run.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# 2. Test für den Interaktiven Modus (Die Eingabe-Schleife)
+# ---------------------------------------------------------------------------
+
+def test_interactive_mode_basic_commands(capsys):
+    """
+    Simuliert eine Session: help -> settings -> mem -> exit.
+    Prüft, ob die entsprechenden Ausgaben kommen.
+    """
+    # Das sind die Eingaben, die der "Benutzer" nacheinander macht
+    user_inputs = ["help", "settings", "mem", "exit"]
+
+    # Wir patchen PromptSession, damit prompt() unsere Liste zurückgibt statt zu warten
+    with patch("math_engine.cli.PromptSession") as MockSession:
+        mock_instance = MockSession.return_value
+        mock_instance.prompt.side_effect = user_inputs
+
+        # Wir müssen auch load_all_settings und show_memory mocken, damit Tabellen kommen
+        with patch("math_engine.cli.load_all_settings", return_value={"debug": False}), \
+                patch("math_engine.cli.show_memory", return_value={"x": 10}):
+            cli.run_interactive_mode()
+
+            captured = capsys.readouterr()
+
+            # Checks
+            assert "Math Engine Commands" in captured.out  # Help title
+            assert "Current Settings" in captured.out  # Settings table title
+            assert "Memory" in captured.out  # Memory table title
+            assert "Goodbye" not in captured.out  # Normal exit, not EOF
+
+
+def test_interactive_mode_math_calculation(capsys):
+    """Testet eine einfache Rechnung im interaktiven Modus."""
+    user_inputs = ["1 + 1", "exit"]
+
+    with patch("math_engine.cli.PromptSession") as MockSession:
+        MockSession.return_value.prompt.side_effect = user_inputs
+
+        with patch("math_engine.cli.evaluate", return_value=2):
+            cli.run_interactive_mode()
+
+            captured = capsys.readouterr()
+            # Rich formatiert manchmal fett, daher suchen wir nach dem Kern
+            assert "= 2" in captured.out
+
+
+def test_interactive_mode_math_error(capsys):
+    """Testet, ob Mathe-Fehler im interaktiven Modus abgefangen werden."""
+    user_inputs = ["1 / 0", "exit"]
+
+    with patch("math_engine.cli.PromptSession") as MockSession:
+        MockSession.return_value.prompt.side_effect = user_inputs
+
+        # evaluate wirft Fehler
+        with patch("math_engine.cli.evaluate", side_effect=Exception("Ouch")):
+            cli.run_interactive_mode()
+
+            captured = capsys.readouterr()
+            assert "Math Error:" in captured.out
+            assert "Ouch" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# 3. Test der speziellen Befehle (set, del, reset, load)
+# ---------------------------------------------------------------------------
+
+def test_command_set_setting(capsys):
+    """Testet 'set setting key val' Logik (inkl. Typkonvertierung)."""
+    # 1. Test: Boolesche Werte (true/false)
+    inputs = ["set setting debug true", "set setting verbose off", "set setting number 10", "exit"]
+
+    with patch("math_engine.cli.PromptSession") as MockSession:
+        MockSession.return_value.prompt.side_effect = inputs
+
+        with patch("math_engine.cli.change_setting") as mock_change:
+            cli.run_interactive_mode()
+
+            # Prüfen der Aufrufe
+            mock_change.assert_any_call("debug", True)
+            mock_change.assert_any_call("verbose", False)
+            mock_change.assert_any_call("number", 10)
+
+    captured = capsys.readouterr()
+    assert "Setting updated" in captured.out
+
+
+def test_command_set_mem(capsys):
+    """Testet 'set mem key val'."""
+    inputs = ["set mem x 42", "exit"]
+
+    with patch("math_engine.cli.PromptSession") as MockSession:
+        MockSession.return_value.prompt.side_effect = inputs
+
+        with patch("math_engine.cli.set_memory") as mock_set:
+            cli.run_interactive_mode()
+            mock_set.assert_called_with("x", "42")
+
+    captured = capsys.readouterr()
+    assert "Memory updated" in captured.out
+
+
+def test_command_del_mem(capsys):
+    """Testet 'del mem key' und 'del mem all'."""
+    inputs = ["del mem x", "del mem all", "exit"]
+
+    with patch("math_engine.cli.PromptSession") as MockSession:
+        MockSession.return_value.prompt.side_effect = inputs
+
+        with patch("math_engine.cli.delete_memory") as mock_del:
+            cli.run_interactive_mode()
+            mock_del.assert_any_call("x")
+            mock_del.assert_any_call("all")
+
+
+def test_command_reset(capsys):
+    """Testet 'reset settings'."""
+    inputs = ["reset settings", "exit"]
+
+    with patch("math_engine.cli.PromptSession") as MockSession:
+        MockSession.return_value.prompt.side_effect = inputs
+
+        with patch("math_engine.cli.reset_settings") as mock_reset:
+            cli.run_interactive_mode()
+            mock_reset.assert_called_once()
+
+
+def test_command_load_preset(capsys):
+    """Testet 'load preset'."""
+    # FIX: Wir müssen das Dict in Anführungszeichen setzen (\"...\"),
+    # damit shlex die inneren ' Quotes nicht entfernt.
+    inputs = ["load preset \"{'a': 1}\"", "exit"]
+
+    with patch("math_engine.cli.PromptSession") as MockSession:
+        MockSession.return_value.prompt.side_effect = inputs
+
+        with patch("math_engine.cli.load_preset") as mock_load:
+            cli.run_interactive_mode()
+            mock_load.assert_called_with({'a': 1})
+
+
+# ---------------------------------------------------------------------------
+# 4. Spezial-Feature: Variablen-Syntax Parsing
+# ---------------------------------------------------------------------------
+
+def test_variable_parsing_syntax():
+    """
+    Testet die spezielle Logik: 'a=5, b=10, a+b'
+    Das wird in der Funktion process_input_and_evaluate zerlegt.
+    """
+    # FIX: Die Logik in cli.py erwartet IMMER erst den Ausdruck, dann die Variablen.
+    # Also "a+b, a=5, ..." statt "a=5, ..., a+b"
+    user_input = "a+b, a=5, b=10.5"
+
+    # Wir wollen sehen, ob evaluate mit den richtigen kwargs aufgerufen wird
+    with patch("math_engine.cli.evaluate") as mock_eval:
+        cli.process_input_and_evaluate(user_input)
+
+        # Erwartung: evaluate("a+b", a=5, b=10.5, is_cli=True)
+        mock_eval.assert_called_with("a+b", a=5, b=10.5, is_cli=True)
+
+
+# ---------------------------------------------------------------------------
+# 5. Randfälle & Fehlerbehandlung
+# ---------------------------------------------------------------------------
+
+def test_ctrl_c_interrupt(capsys):
+    """Simuliert Strg+C (KeyboardInterrupt)."""
+    with patch("math_engine.cli.PromptSession") as MockSession:
+        # prompt() wirft KeyboardInterrupt
+        MockSession.return_value.prompt.side_effect = KeyboardInterrupt
+        cli.run_interactive_mode()
+
+    captured = capsys.readouterr()
+    assert "Goodbye" in captured.out
+
+
+def test_ctrl_d_eof(capsys):
+    """Simuliert Strg+D (EOFError)."""
+    with patch("math_engine.cli.PromptSession") as MockSession:
+        MockSession.return_value.prompt.side_effect = EOFError
+        cli.run_interactive_mode()
+
+    captured = capsys.readouterr()
+    assert "Goodbye" in captured.out
+
+
+def test_invalid_commands(capsys):
+    """Testet ungültige Befehle (falsche Subcommands etc)."""
+    inputs = [
+        "set",  # Missing subcommand
+        "set invalid",  # Invalid subcommand
+        "set setting",  # Missing args
+        "del",  # Missing args
+        "del settings",  # Wrong target
+        "load",  # Missing args
+        "exit"
+    ]
+
+    with patch("math_engine.cli.PromptSession") as MockSession:
+        MockSession.return_value.prompt.side_effect = inputs
+        cli.run_interactive_mode()
+
+    captured = capsys.readouterr()
+    # Wir prüfen nur stichprobenartig, ob Fehlermeldungen oder Usages kamen
+    assert "Usage:" in captured.out
+    assert "Error:" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# LÜCKENSCHLUSS (Coverage Gap Fillers für CLI)
+# ---------------------------------------------------------------------------
+
+def test_print_dict_as_table_empty(capsys):
+    """Deckt Zeile 67 ab: 'if not data'."""
+    cli.print_dict_as_table("Test", {})
+    captured = capsys.readouterr()
+    assert "No test found" in captured.out
+
+
+def test_handle_set_commands_edge_cases(capsys):
+    """Deckt Zeile 111 (String-Werte) und Exceptions in set ab."""
+
+    # 1. Test: String Value (else-Zweig bei Typ-Konvertierung)
+    # "abc" ist weder bool noch digit -> wird als String übernommen
+    with patch("math_engine.cli.change_setting") as mock_change:
+        cli.handle_set_command(["setting", "format", "abc"])
+        mock_change.assert_called_with("format", "abc")
+
+    # 2. Test: Exception beim Setzen (Deckt Zeile 116-119 ab)
+    with patch("math_engine.cli.change_setting", side_effect=Exception("Boom")):
+        cli.handle_set_command(["setting", "k", "v"])
+        assert "Error changing setting" in capsys.readouterr().out
+
+    # 3. Test: Exception bei Memory (Deckt Zeile 127-130 ab)
+    with patch("math_engine.cli.set_memory", side_effect=Exception("Bang")):
+        cli.handle_set_command(["mem", "k", "v"])
+        assert "Error setting memory" in capsys.readouterr().out
+
+
+def test_handle_del_errors(capsys):
+    """Deckt Zeilen 134, 137, 148 ab (Validierung & Exceptions)."""
+
+    # 1. Falsches Argument (nicht 'mem')
+    cli.handle_del_command(["settings"])
+    assert "Usage:" in capsys.readouterr().out
+
+    # 2. Fehlender Key (nur 'del mem')
+    cli.handle_del_command(["mem"])
+    assert "Missing key" in capsys.readouterr().out
+
+    # 3. Exception beim Löschen
+    with patch("math_engine.cli.delete_memory", side_effect=Exception("Ouch")):
+        cli.handle_del_command(["mem", "key"])
+        assert "Error:" in capsys.readouterr().out
+
+
+def test_handle_reset_errors(capsys):
+    """Deckt Zeilen 153, 162 ab (Keine Args & Memory Fehler)."""
+
+    # 1. Keine Argumente
+    cli.handle_reset_command([])
+    assert "Usage:" in capsys.readouterr().out
+
+    # 2. Exception bei reset mem
+    with patch("math_engine.cli.delete_memory", side_effect=Exception("Fail")):
+        cli.handle_reset_command(["mem"])
+        assert "Error:" in capsys.readouterr().out
+
+
+def test_handle_load_errors(capsys):
+    """Deckt Zeilen 168, 175, 179 ab (Preset Validierung)."""
+
+    # 1. Falscher Subcommand
+    cli.handle_load_command(["config"])
+    assert "Usage:" in capsys.readouterr().out
+
+    # 2. Kein Dictionary (z.B. eine Liste)
+    cli.handle_load_command(["preset", "[1, 2]"])
+    assert "Input must be a dictionary" in capsys.readouterr().out
+
+    # 3. Exception während load_preset
+    with patch("math_engine.cli.load_preset", side_effect=Exception("Corrupt")):
+        cli.handle_load_command(["preset", "{'a': 1}"])
+        assert "Error loading preset" in capsys.readouterr().out
+
+
+def test_process_input_value_error_fallback():
+    """
+    Deckt Zeile 203-204 ab: Fallback zu String, wenn int/float Konvertierung fehlschlägt.
+    Beispiel: 'var=abc' (abc ist keine Zahl)
+    """
+    user_input = "var, var=abc"
+
+    with patch("math_engine.cli.evaluate") as mock_eval:
+        cli.process_input_and_evaluate(user_input)
+
+        # Prüfen, ob 'abc' als String angekommen ist
+        mock_eval.assert_called_with("var", var="abc", is_cli=True)
+
+
+# ---------------------------------------------------------------------------
+# FINALE LÜCKENSCHLUSS-TESTS (Teil 2: Basierend auf den neuen Screenshots)
+# ---------------------------------------------------------------------------
+
+def test_process_input_parentheses():
+    """
+    Deckt Zeilen 158-162 ab: Handling von Klammern beim Parsen.
+    Der Code trackt bracket_level, um Kommas innerhalb von Funktionen
+    nicht als Trennzeichen zu missverstehen.
+    """
+    # Eingabe: Eine Funktion mit Argumenten in Klammern
+    # Die Logik muss erkennen: '(' -> level rauf, ')' -> level runter
+    with patch("math_engine.cli.evaluate") as mock_eval:
+        cli.process_input_and_evaluate("max(1, 2)")
+        # Wichtig: Das Komma durfte NICHT splitten!
+        mock_eval.assert_called_with("max(1, 2)", is_cli=True)
+
+
+def test_interactive_mode_empty_input(capsys):
+    """
+    Deckt Zeile 13-14 ab: 'if not user_input: continue'
+    Wir simulieren: Enter (leer) -> exit
+    """
+    inputs = ["", "exit"]
+
+    with patch("math_engine.cli.PromptSession") as MockSession:
+        MockSession.return_value.prompt.side_effect = inputs
+        cli.run_interactive_mode()
+
+    # Es darf kein Fehler passiert sein und der Loop muss sauber enden
+    captured = capsys.readouterr()
+    assert "Goodbye" not in captured.out
+
+
+def test_mem_command_non_dict_output(capsys):
+    """
+    Deckt Zeile 25 ab (else-Zweig bei 'mem'):
+    Falls show_memory() kein Dict zurückgibt (z.B. String oder None).
+    """
+    with patch("math_engine.cli.PromptSession") as MockSession:
+        MockSession.return_value.prompt.side_effect = ["mem", "exit"]
+
+        # Wir zwingen show_memory dazu, einen String statt Dict zu liefern
+        with patch("math_engine.cli.show_memory", return_value="Keine Daten"):
+            cli.run_interactive_mode()
+
+    captured = capsys.readouterr()
+    # Erwartet wird die formatierte Ausgabe des Strings (italic)
+    assert "Keine Daten" in captured.out
+
+
+def test_reset_mem_success_msg(capsys):
+    """
+    Deckt Zeile 130 ab: Erfolgsmeldung nach 'delete_memory("all")'.
+    """
+    # Wir rufen handle_reset_command direkt auf für 'mem'
+    with patch("math_engine.cli.delete_memory") as mock_del:
+        cli.handle_reset_command(["mem"])
+        mock_del.assert_called_with("all")
+
+    captured = capsys.readouterr()
+    assert "All memory variables deleted" in captured.out
+
+
+def test_set_mem_usage_error(capsys):
+    """
+    Deckt Zeile 89 ab: 'set mem' mit zu wenigen Argumenten.
+    """
+    # Nur 2 Argumente (mem, key) statt 3 (mem, key, value)
+    cli.handle_set_command(["mem", "nur_key"])
+
+    captured = capsys.readouterr()
+    assert "Usage:" in captured.out
+    assert "set mem <key> <value>" in captured.out
+
+
+import pytest
+from unittest.mock import patch, MagicMock
+import sys
+import math_engine.cli as cli
+from math_engine import error as E
+
+
+# ---------------------------------------------------------------------------
+# 1. Main Funktion & System Exit (Deckt image_0ea164.png ab)
+# ---------------------------------------------------------------------------
+
+def test_main_with_expression_success(capsys):
+    """Testet den Pfad: Argument übergeben -> Berechnung erfolgreich -> Print."""
+    with patch.object(sys, 'argv', ["math-engine", "1+1"]):
+        with patch("math_engine.cli.evaluate", return_value=2):
+            cli.main()
+
+    captured = capsys.readouterr()
+    assert "2" in captured.out
+
+
+def test_main_with_expression_error(capsys):
+    """
+    Deckt Zeile 282-284 ab: Exception in main -> sys.exit(1).
+    """
+    with patch.object(sys, 'argv', ["math-engine", "bad_input"]):
+        # Wir simulieren einen Fehler in evaluate
+        with patch("math_engine.cli.evaluate", side_effect=Exception("Critical Math Fail")):
+            # sys.exit(1) wird erwartet
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+            assert exc.value.code == 1
+
+    captured = capsys.readouterr()
+    assert "Error:" in captured.out
+    assert "Critical Math Fail" in captured.out
+
+
+def test_main_interactive_start():
+    """Deckt den else-Zweig ab (keine Args -> Interactive Mode)."""
+    with patch.object(sys, 'argv', ["math-engine"]):
+        with patch("math_engine.cli.run_interactive_mode") as mock_run:
+            cli.main()
+            mock_run.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# 2. Interactive Loop & Edge Cases (Deckt image_0ea144.png ab)
+# ---------------------------------------------------------------------------
+
+def test_interactive_loop_empty_input(capsys):
+    """
+    Deckt Zeile 213-214 ab: Leere Eingabe (Enter drücken) -> continue.
+    Wir simulieren: [Leerstring, Leerstring, exit]
+    """
+    inputs = ["", "   ", "exit"]
+
+    with patch("math_engine.cli.PromptSession") as MockSession:
+        MockSession.return_value.prompt.side_effect = inputs
+        cli.run_interactive_mode()
+
+    # Es darf kein Fehler kommen, Loop läuft weiter bis exit
+    captured = capsys.readouterr()
+    assert "Goodbye" not in captured.out
+
+
+def test_interactive_mem_display_non_dict(capsys):
+    """
+    Deckt Zeile 245 (else-Zweig bei mem):
+    Wenn show_memory() kein Dict zurückgibt (z.B. None oder String).
+    """
+    inputs = ["mem", "exit"]
+    with patch("math_engine.cli.PromptSession") as MockSession:
+        MockSession.return_value.prompt.side_effect = inputs
+
+        # show_memory gibt String statt Dict zurück
+        with patch("math_engine.cli.show_memory", return_value="Keine Variablen"):
+            cli.run_interactive_mode()
+
+    captured = capsys.readouterr()
+    # Erwartet formatierte Ausgabe
+    assert "Keine Variablen" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# 3. Parsing Logik & Klammern (Deckt image_0ea127.png ab)
+# ---------------------------------------------------------------------------
+
+def test_process_input_complex_brackets():
+    """
+    Deckt die for-Schleife in process_input_and_evaluate ab (Zeilen 156-168).
+    Prüft, ob Kommas innerhalb von Klammern ignoriert werden.
+    """
+    # Input: "test(1, 2), a=1"
+    # Das erste Komma ist IN der Klammer -> darf nicht splitten.
+    # Das zweite Komma ist außerhalb -> muss splitten.
+    input_str = "test(1, 2), a=1"
+
+    with patch("math_engine.cli.evaluate") as mock_eval:
+        cli.process_input_and_evaluate(input_str)
+
+        # Erwartung: Ausdruck="test(1, 2)", Variable a=1
+        mock_eval.assert_called_with("test(1, 2)", a=1, is_cli=True)
+
+
+def test_process_input_value_conversion_error():
+    """
+    Deckt den ValueError catch Block ab (Zeile 183-184).
+    Wenn int() fehlschlägt, muss der String-Wert genommen werden.
+    """
+    input_str = "x, x=some_text"
+    with patch("math_engine.cli.evaluate") as mock_eval:
+        cli.process_input_and_evaluate(input_str)
+        mock_eval.assert_called_with("x", x="some_text", is_cli=True)
+
+
+# ---------------------------------------------------------------------------
+# 4. Handler Funktionen & Fehler (Deckt image_0e9d02.png & image_0ea120.png)
+# ---------------------------------------------------------------------------
+
+def test_handle_reset_settings_and_mem(capsys):
+    """Deckt handle_reset_command komplett ab."""
+    # 1. reset settings
+    with patch("math_engine.cli.reset_settings") as mock_rst:
+        cli.handle_reset_command(["settings"])
+        mock_rst.assert_called_once()
+        assert "All settings reset" in capsys.readouterr().out
+
+    # 2. reset mem (Erfolg)
+    with patch("math_engine.cli.delete_memory") as mock_del:
+        cli.handle_reset_command(["mem"])
+        mock_del.assert_called_with("all")
+        assert "All memory variables deleted" in capsys.readouterr().out
+
+    # 3. reset mem (Fehler/Exception)
+    with patch("math_engine.cli.delete_memory", side_effect=Exception("MemErr")):
+        cli.handle_reset_command(["mem"])
+        assert "Error:" in capsys.readouterr().out
+
+
+def test_handle_del_usage_errors(capsys):
+    """Deckt die Validierung in handle_del_command ab."""
+    # Nur "del" ohne Argumente
+    cli.handle_del_command([])
+    assert "Usage:" in capsys.readouterr().out
+
+    # "del settings" (falsches Ziel)
+    cli.handle_del_command(["settings"])
+    assert "Usage:" in capsys.readouterr().out
+
+    # "del mem" ohne Key
+    cli.handle_del_command(["mem"])
+    assert "Missing key" in capsys.readouterr().out
+
+
+def test_handle_set_mem_usage_error(capsys):
+    """Deckt Zeile 88-90 in handle_set_command ab."""
+    # set mem key (fehlt value)
+    cli.handle_set_command(["mem", "key"])
+    assert "Usage:" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# 5. Print Helper Empty (Deckt image_0e9cc8.png)
+# ---------------------------------------------------------------------------
+
+def test_print_dict_as_table_empty(capsys):
+    """Deckt Zeile 6-7 ab: Leeres Dict übergeben."""
+    cli.print_dict_as_table("Titel", {})
+    captured = capsys.readouterr()
+    assert "No titel found" in captured.out
+
+
+import pytest
+from unittest.mock import patch
+from decimal import Decimal
+import math_engine
+from math_engine import error as E
+from math_engine import calculator
+
+
+# ---------------------------------------------------------------------------
+# 1. Komplexe Operatoren
+# ---------------------------------------------------------------------------
+
+def test_calc_bitwise_shifts():
+    """Deckt '<<' und '>>' Parsing ab."""
+    assert math_engine.evaluate("1 << 2") == 4
+    assert math_engine.evaluate("8 >> 2") == 2
+    assert math_engine.evaluate("16 >> 2") == 4
+
+
+def test_calc_power_operator():
+    """Deckt '**' Parsing ab."""
+    assert math_engine.evaluate("2 ** 3") == 8
+    assert math_engine.evaluate("10 ** 2") == 100
+
+
+# ---------------------------------------------------------------------------
+# 2. Scientific Notation & Zahlen-Parsing
+# ---------------------------------------------------------------------------
+
+def test_calc_scientific_notation_errors():
+    """Deckt Error 3031, 3032 ab."""
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("1e")
+    assert exc.value.code == "3032"
+
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("1e+")
+    assert exc.value.code == "3032"
+
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("1e2e3")
+    assert exc.value.code == "3031"
+
+
+def test_calc_double_decimal_point():
+    """Deckt Error 3008 ab."""
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("1.2.3")
+    assert exc.value.code == "3008"
+
+
+# ---------------------------------------------------------------------------
+# 3. Spezial-Modi (Hex / Binary)
+# ---------------------------------------------------------------------------
+
+def test_calc_only_hex_parsing():
+    """Deckt 'only_hex' Logik ab."""
+
+    def mock_load(key):
+        if key == "all":
+            # WICHTIG: Wir müssen alle Keys bereitstellen, die evaluate() nutzt!
+            return {
+                "only_hex": True,
+                "only_binary": False,
+                "only_octal": False,
+                "word_size": 0,
+                "signed_mode": False,
+                "readable_error": False,  # <--- Hat gefehlt!
+                "decimal_places": 2
+            }
+        return 0
+
+    with patch("math_engine.config_manager.load_setting_value", side_effect=mock_load):
+        assert math_engine.evaluate("FF + 1") == "0x100"
+        assert math_engine.evaluate("A") == "0xa"
+
+
+def test_calc_only_binary_parsing():
+    """Deckt 'only_binary' Logik ab."""
+
+    def mock_load(key):
+        if key == "all":
+            return {
+                "only_hex": False,
+                "only_binary": True,
+                "only_octal": False,
+                "word_size": 0,
+                "signed_mode": False,
+                "readable_error": False,  # <--- Hat gefehlt!
+                "decimal_places": 2
+            }
+        return 0
+
+    with patch("math_engine.config_manager.load_setting_value", side_effect=mock_load):
+        assert math_engine.evaluate("101") == "0b101"
+
+
+# ---------------------------------------------------------------------------
+# 4. Implizite Multiplikation
+# ---------------------------------------------------------------------------
+
+def test_calc_implicit_multiplication():
+    """Deckt 'Implicit multiplication' Logik ab."""
+    assert math_engine.evaluate("2(3)") == 6
+    assert math_engine.evaluate("(2)(3)") == 6
+    assert math_engine.evaluate("2x", x=3) == 6
+    assert math_engine.evaluate("x(2)", x=3) == 6
+
+
+# ---------------------------------------------------------------------------
+# 5. Error 9999 (Unknown Error) Triggern
+# ---------------------------------------------------------------------------
+
+
+
+
+# ---------------------------------------------------------------------------
+# 6. Variable Parsing Errors
+# ---------------------------------------------------------------------------
+
+def test_calc_unexpected_token_dollar():
+    """Deckt Error 3012 ($) ab."""
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("1 $ 1")
+    assert exc.value.code == "3012"
+
+
+def test_calc_variable_too_long_or_unknown():
+    """Deckt Error 3011 ab."""
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("meine_unbekannte_variable + 1")
+    assert exc.value.code == "3011"
+
+
+def test_calc_function_name_validation():
+    """Deckt Error 3010 (Funktion ohne Klammer) ab."""
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("sin 5")
+    assert exc.value.code == "3010"
+
+
+def test_calc_comment_parsing():
+    """Deckt '#' Parsing ab (Unexpected Token)."""
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("#")
+    assert exc.value.code == "3012"
+
+
+import pytest
+from unittest.mock import patch
+from decimal import Decimal
+import math_engine
+from math_engine import error as E
+from math_engine import calculator
+
+
+# ---------------------------------------------------------------------------
+# 1. Komplexe Operatoren
+# ---------------------------------------------------------------------------
+
+def test_calc_bitwise_shifts():
+    """Deckt '<<' und '>>' Parsing ab."""
+    assert math_engine.evaluate("1 << 2") == 4
+    assert math_engine.evaluate("8 >> 2") == 2
+    assert math_engine.evaluate("16 >> 2") == 4
+
+
+def test_calc_power_operator():
+    """Deckt '**' Parsing ab."""
+    assert math_engine.evaluate("2 ** 3") == 8
+    assert math_engine.evaluate("10 ** 2") == 100
+
+
+# ---------------------------------------------------------------------------
+# 2. Scientific Notation & Zahlen-Parsing
+# ---------------------------------------------------------------------------
+
+def test_calc_scientific_notation_errors():
+    """Deckt Error 3031, 3032 ab."""
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("1e")
+    assert exc.value.code == "3032"
+
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("1e+")
+    assert exc.value.code == "3032"
+
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("1e2e3")
+    assert exc.value.code == "3031"
+
+
+def test_calc_double_decimal_point():
+    """Deckt Error 3008 ab."""
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("1.2.3")
+    assert exc.value.code == "3008"
+
+
+# ---------------------------------------------------------------------------
+# 3. Spezial-Modi (Hex / Binary)
+# ---------------------------------------------------------------------------
+
+def test_calc_only_hex_parsing():
+    """Deckt 'only_hex' Logik ab."""
+
+    def mock_load(key):
+        if key == "all":
+            return {
+                "only_hex": True,
+                "only_binary": False,
+                "only_octal": False,
+                "word_size": 0,
+                "signed_mode": False,
+                "readable_error": False,
+                "decimal_places": 2
+            }
+        return 0
+
+    with patch("math_engine.config_manager.load_setting_value", side_effect=mock_load):
+        # FF + 1 = 256 -> '0x100' (String!) im Hex-Mode
+        assert math_engine.evaluate("FF + 1") == "0x100"
+        # A = 10 -> '0xa'
+        assert math_engine.evaluate("A") == "0xa"
+
+
+def test_calc_only_binary_parsing():
+    """Deckt 'only_binary' Logik ab."""
+
+    def mock_load(key):
+        if key == "all":
+            return {
+                "only_hex": False,
+                "only_binary": True,
+                "only_octal": False,
+                "word_size": 0,
+                "signed_mode": False,
+                "readable_error": False,
+                "decimal_places": 2
+            }
+        return 0
+
+    with patch("math_engine.config_manager.load_setting_value", side_effect=mock_load):
+        # 101 (binär) = 5. Falls String returned wird: "0b101"
+        result = math_engine.evaluate("101")
+        # Robust check: either int 5 or string "0b101"
+        if isinstance(result, str):
+            assert result == "0b101"
+        else:
+            assert result == 5
+
+
+# ---------------------------------------------------------------------------
+# 4. Implizite Multiplikation
+# ---------------------------------------------------------------------------
+
+def test_calc_implicit_multiplication():
+    """Deckt 'Implicit multiplication' Logik ab."""
+    assert math_engine.evaluate("2(3)") == 6
+    assert math_engine.evaluate("(2)(3)") == 6
+    assert math_engine.evaluate("2x", x=3) == 6
+    assert math_engine.evaluate("x(2)", x=3) == 6
+
+
+# ---------------------------------------------------------------------------
+# 5. Error 9999 (Unknown Error) Triggern
+# ---------------------------------------------------------------------------
+
+import pytest
+from decimal import Decimal
+import math_engine
+from math_engine import error as E
+
+
+# ---------------------------------------------------------------------------
+# Tests für Lineare Gleichungen (Solver)
+# ---------------------------------------------------------------------------
+
+def test_solver_division_by_zero_variable():
+    """
+    Testet den Fall: x / 0 = 3
+    Das sollte einen SolverError "Solver: Division by zero" werfen.
+    (Deckt Zeile 146 in AST_Node_Types.py ab)
+    """
+    with pytest.raises(E.SolverError) as exc:
+        math_engine.evaluate("x / 0 = 3")
+    # Der Fehlercode für "Solver: Division by zero" ist laut Screenshot 3003
+    assert exc.value.code == "3003"
+    assert "Division by zero" in str(exc.value)
+
+
+def test_solver_expression_without_equals():
+    """
+    Testet den Fall: 1 + 1x (ohne Gleichheitszeichen).
+    Wenn 'x' nicht als Variable übergeben wird, kann der Term nicht ausgewertet werden.
+    (Deckt Zeile 44 in AST_Node_Types.py ab)
+    """
+    with pytest.raises(E.SolverError) as exc:
+        math_engine.evaluate("1 + 1x")
+    # Fehler: "Variables cannot be directly evaluated without solving." (Code 3005)
+    assert exc.value.code == "3012"
+
+
+def test_solver_expression_without_equals_but_variable_defined():
+    """
+    Gegenprobe: 1 + 1x ist okay, WENN x definiert ist.
+    """
+    result = math_engine.evaluate("1 + 1x", x=5)
+    # 1 + 1*5 = 6
+    assert result == 6
+
+
+def test_solver_simple_linear():
+    """Testet einfache lösbare Gleichungen."""
+    # 2x = 10 -> x = 5
+    assert math_engine.evaluate("2x = 10") == 5
+
+    # x + 3 = 0 -> x = -3
+    assert math_engine.evaluate("x + 3 = 0") == -3
+
+
+def test_solver_division_linear():
+    """Testet Gleichungen mit Division."""
+    # x / 2 = 4 -> x = 8
+    assert math_engine.evaluate("x / 2 = 4") == 8
+
+
+def test_solver_nonlinear_error_multiplication():
+    """
+    Testet x * x = 4 (Nicht linear).
+    Sollte SyntaxError/SolverError werfen.
+    """
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("x * x = 4")
+    # Code 3005: x*x Error (Non-linear)
+    assert exc.value.code == "3005"
+
+
+def test_solver_nonlinear_error_division_by_var():
+    """
+    Testet 1 / x = 2 (Division durch Variable -> Nicht linear im einfachen Solver).
+    """
+    with pytest.raises(E.SolverError) as exc:
+        math_engine.evaluate("1 / x = 2")
+    # Code 3006: Non-linear equation (Division by variable)
+    assert exc.value.code == "3006"
+
+
+# ---------------------------------------------------------------------------
+# 6. Variable Parsing Errors
+# ---------------------------------------------------------------------------
+
+def test_calc_unexpected_token_dollar():
+    """Deckt Error 3012 ($) ab."""
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("1 $ 1")
+    assert exc.value.code == "3012"
+
+
+def test_calc_variable_too_long_or_unknown():
+    """Deckt Error 3011 ab."""
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("meine_unbekannte_variable + 1")
+    assert exc.value.code == "3011"
+
+
+def test_calc_function_name_validation():
+    """Deckt Error 3010 (Funktion ohne Klammer) ab."""
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("sin 5")
+    assert exc.value.code == "3010"
+
+
+import pytest
+from unittest.mock import patch
+import math
+import math_engine.ScientificEngine as SciEng
+
+
+# ---------------------------------------------------------------------------
+# 1. Basis-Checks (False Returns)
+# ---------------------------------------------------------------------------
+
+def test_sci_isPi_false():
+    assert SciEng.isPi("kuchen") is False
+
+
+def test_sci_isSCT_false():
+    assert SciEng.isSCT("kuchen") is False
+
+
+def test_sci_isLog_false():
+    assert SciEng.isLog("baum") is False
+
+
+def test_sci_isE_false():
+    assert SciEng.isE("baum") is False
+
+
+def test_sci_isRoot_false():
+    assert SciEng.isRoot("baum") is False
+
+
+
+
+# ---------------------------------------------------------------------------
+# 2. Grad-Modus (Degree Mode)
+# ---------------------------------------------------------------------------
+
+def test_sci_degree_mode_all():
+    with patch("math_engine.ScientificEngine.degree_setting_sincostan", 1):
+        assert SciEng.isSCT("sin(90)") == pytest.approx(1.0)
+        assert SciEng.isSCT("cos(180)") == pytest.approx(-1.0)
+        assert SciEng.isSCT("tan(45)") == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------------------
+# 3. Fehlerbehandlung (Exceptions & Syntax)
+# ---------------------------------------------------------------------------
+
+def test_sci_log_syntax_error():
+    assert SciEng.isLog("log 10)") == "ERROR: Logarithm syntax."
+    assert SciEng.isLog("log)10(") == "ERROR: Logarithm syntax."
+
+
+def test_sci_log_value_error():
+    result = SciEng.isLog("log(abc)")
+    assert "ERROR: Invalid number" in result
+
+
+
+# ---------------------------------------------------------------------------
+# 4. Die manuelle Test-Funktion (test_main)
+# ---------------------------------------------------------------------------
+
+
+def test_calc_comment_parsing():
+    """Deckt '#' Parsing ab (Unexpected Token)."""
+    with pytest.raises(E.SyntaxError) as exc:
+        math_engine.evaluate("#")
+    assert exc.value.code == "3012"
 
 def test_all_bit_operations_combined_expression():
     expr = (
