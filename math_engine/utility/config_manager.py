@@ -22,7 +22,7 @@ import json
 from . import error as E
 
 # Absolute paths to configuration files (relative to repository root)
-config_json = Path(__file__).resolve().parent / "config.json"
+config_json = Path(__file__).resolve().parent.parent / "config.json"
 ui_strings = Path(__file__).resolve().parent.parent / "ui_strings.json"
 
 

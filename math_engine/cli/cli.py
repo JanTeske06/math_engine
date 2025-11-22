@@ -5,18 +5,17 @@ import ast
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
-from rich.text import Text
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import WordCompleter, NestedCompleter
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
 
-# Deine internen Importe (beibehalten)
-from . import (
-    evaluate, error, __version__,
+
+from .. import (
+    evaluate, __version__,
     set_memory, delete_memory, show_memory,
     change_setting, load_preset, load_all_settings,
-    load_one_setting, reset_settings
+    reset_settings
 )
 
 console = Console()
@@ -185,12 +184,38 @@ def process_input_and_evaluate(user_input):
 
             temp_vars[key] = val
     return evaluate(expression, **temp_vars, is_cli=True)
+bool_completer = WordCompleter(['true', 'false', 'on', 'off'], ignore_case=True)
 
+word_size_completer = WordCompleter(['8', '16', '32', '64', '0'], ignore_case=True)
 
-def run_interactive_mode():
+def run_interactive_mode(settings = None):
+    if settings == None:
+        load_all_settings()
     console.clear()
     console.print(f"[bold blue]Math Engine {__version__} Interactive Shell[/bold blue]")
     console.print("Type [bold]help[/bold] for commands, [bold]exit[/bold] to leave.\n")
+
+    current_settings = load_all_settings()  # Die tatsächlichen Werte und Typen
+
+    bool_completer = WordCompleter(['true', 'false'], ignore_case=True)
+
+    specific_completers = {
+        'word_size': WordCompleter(['8', '16', '32', '64', '0'], ignore_case=True),
+        'default_output_format': WordCompleter(['decimal:', 'hex:', 'binary:', 'octal:', 'int:', 'str:', 'float:'], ignore_case=True)
+    }
+
+    setting_value_completers = {}
+
+    for key, value in current_settings.items():
+        if key in specific_completers:
+            setting_value_completers[key] = specific_completers[key]
+        elif isinstance(value, bool):
+            setting_value_completers[key] = bool_completer
+        elif isinstance(value, int) or isinstance(value, float):
+            default_numeric = [str(value)]
+            setting_value_completers[key] = WordCompleter(default_numeric, ignore_case=True)
+        else:
+            setting_value_completers[key] = None
 
     completer = NestedCompleter.from_nested_dict({
         'help': {'mem': None, 'settings': None},
@@ -201,7 +226,7 @@ def run_interactive_mode():
         'load': {'preset': None},
         'set': {
             'mem': None,
-            'setting': None
+            'setting': setting_value_completers
         },
         'exit': None,
         'quit': None
@@ -272,7 +297,9 @@ def run_interactive_mode():
             console.print(f"[bold red]System Error:[/bold red] {e}")
 
 
-def main():
+def main(settings = None):
+    if settings == None:
+        load_all_settings()
     parser = argparse.ArgumentParser(description="Math Engine CLI")
     parser.add_argument("expression", nargs="?", help="Expression to evaluate")
 
@@ -286,8 +313,10 @@ def main():
             console.print(f"[bold red]Error:[/bold red] {e}")
             sys.exit(1)
     else:
-        run_interactive_mode()
+        run_interactive_mode(settings)
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     settings = load_all_settings()
+#     new_dict = {key: None for key in settings}
+#     main(new_dict)

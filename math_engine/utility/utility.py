@@ -59,7 +59,7 @@ def isfloat(number_str):
 def isScOp(token):
     """Return index of a known scientific operation or -1 if unknown."""
     try:
-        from .calculator import Science_Operations
+        from ..calculator.calculator import Science_Operations
         return Science_Operations.index(token)
     except ValueError:
         return -1
@@ -68,7 +68,7 @@ def isScOp(token):
 def isOp(token):
     """Return index of a known basic operator or -1 if unknown."""
     try:
-        from .calculator import Operations
+        from ..calculator.calculator import Operations
         return Operations.index(token)
     except ValueError:
         return -1

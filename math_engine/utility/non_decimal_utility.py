@@ -3,7 +3,7 @@ from . import error as E
 
 
 def non_decimal_scan(problem: str, b: int, settings: dict):
-    from .calculator import Operations
+    from ..calculator.calculator import Operations
     """
     Versucht, eine nicht-dezimale Zahl (0b, 0x, 0o) am Index b zu parsen.
 
@@ -89,7 +89,7 @@ def value_to_int(value):
 
 
 def int_to_value(number, output_prefix, settings):
-    from .calculator import Operations
+    from ..calculator.calculator import Operations
     if isinstance(number, (Decimal, float, int)) and number % 1 != 0:
         raise E.ConversionError("Cannot convert non-integer value to non decimal.", code="8003")
     try:

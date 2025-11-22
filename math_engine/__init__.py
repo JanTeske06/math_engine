@@ -1,11 +1,10 @@
-from email import message_from_string
-
-import math_engine.calculator
 from . import calculator
-from . import config_manager as config_manager
-from . import error as E
-from . import plugin_manager
-from typing import Any, Mapping, Optional
+from .calculator import ScientificEngine
+from .utility import config_manager as config_manager
+from .utility import plugin_manager, error as E
+from.calculator.calculator import calculate
+from .utility import config_manager as config_manager
+from typing import Optional
 from typing import Union
 from typing import Any, Mapping
 __version__ = "0.6.3"
@@ -52,7 +51,7 @@ def load_preset(settings: dict):
 
 
 def load_all_settings():
-    settings = config_manager.load_setting_value("all")
+    settings =  config_manager.load_setting_value("all")
     return settings
 
 def load_one_setting(setting):
@@ -63,6 +62,7 @@ def evaluate(expr: str,
              variables: Optional[Mapping[str, Any]] = None,
              is_cli: bool = False,
              **kwvars: Any) -> Any:
+
     if variables is None:
         merged = dict(kwvars)
     else:
@@ -74,14 +74,14 @@ def evaluate(expr: str,
 
 
     if settings["readable_error"] == False:
-        result = calculator.calculate(expr, merged,1) # 0 = Validate, 1 = Calculate
+        result = calculate(expr, merged,1) # 0 = Validate, 1 = Calculate
         return result
 
 
     elif settings["readable_error"]== True:
         result = -1
         try:
-            result = calculator.calculate(expr, merged, 1)  # 0 = Validate, 1 = Calculate
+            result = calculate(expr, merged, 1)  # 0 = Validate, 1 = Calculate
             if isinstance(result, E.MathError):
                 raise result
 
@@ -148,7 +148,7 @@ def validate(expr: str,
     merged = dict(list(memory.items()) + list(merged.items()))
     result = -1
     try:
-        result = calculator.calculate(expr, merged, 0)  # 0 = Validate, 1 = Calculate
+        result = calculate(expr, merged, 0)  # 0 = Validate, 1 = Calculate
         return result
 
     except E.MathError as e:
@@ -186,5 +186,5 @@ def reset_settings():
 
 
 if __name__ == '__main__':
-    plugin_manager.load_plugins()
-    print(evaluate("1 + 1x"))
+    #plugin_manager.load_plugins()
+    print(evaluate("1 + 1"))

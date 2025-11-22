@@ -16,12 +16,12 @@ from decimal import Decimal, getcontext, Overflow, DivisionImpossible, InvalidOp
 import fractions
 from typing import Union
 import re
-from .utility import boolean, isDecimal, get_line_number, isInt, isfloat, isScOp, isOp, isolate_bracket
-from . import config_manager as config_manager
+from ..utility.utility import boolean, isInt, isfloat, isScOp, isOp
+from math_engine import config_manager as config_manager
 from . import ScientificEngine
-from . import error as E
-from .plugin_manager import function_register
-from .non_decimal_utility import int_to_value, value_to_int, non_decimal_scan, apply_word_limit, setbit, bitor, bitand, bitnot, bitxor, shl, shr, clrbit, togbit, testbit
+from ..utility import error as E
+from ..utility.plugin_manager import function_register
+from ..utility.non_decimal_utility import int_to_value, value_to_int, non_decimal_scan, apply_word_limit, setbit, bitor, bitand, bitnot, bitxor, shl, shr, clrbit, togbit, testbit
 from .AST_Node_Types import Number, BinOp, Variable
 
 # Debug toggle for optional prints in this module
@@ -529,89 +529,89 @@ def ast(received_string, settings, custom_variables):
             token_spans.pop(0)
             return subtree_in_paren
 
-        elif token in plugin_operations:
-            if not tokens or tokens[0] != '(':
-                err_pos = token_spans[0][0] if token_spans else pos[1]
-                raise E.SyntaxError(f"Missing opening parenthesis after bit function {token}", code="3010",
-                                    position_start=err_pos)
-
-            tokens.pop(0)
-            l_paren_pos = token_spans.pop(0)
-
-            argument_subtree = parse_bor(tokens, token_spans)
-
-            def get_second_arg_and_close():
-                if not tokens or tokens[0] != ',':
-                    err_pos = token_spans[0][0] if token_spans else l_paren_pos[0]
-                    raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009",
-                                        position_start=err_pos)
-                tokens.pop(0)
-                token_spans.pop(0)
-
-                base_sub = parse_bor(tokens, token_spans)
-
-                if not tokens or tokens[0] != ')':
-                    raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009",
-                                        position_start=l_paren_pos[0])
-                tokens.pop(0)
-                end_pos = token_spans.pop(0)
-                return base_sub, end_pos
-
-            def close_only():
-                if not tokens or tokens[0] != ')':
-                    raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code="3009",
-                                        position_start=l_paren_pos[0])
-                tokens.pop(0)
-                token_spans.pop(0)
-                if tokens and tokens[0] == ',':
-                    err_pos = token_spans[0][0]
-                    raise E.SyntaxError(f"Comma in '{token}'", code="8008", position_start=err_pos)
-
-                if not tokens or tokens[0] != ')':
-                    err_pos = token_spans[0][0] if token_spans else pos[1] + 1
-                    raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code="3009",
-                                        position_start=err_pos)
-                tokens.pop(0)
-                end_paren_span = token_spans.pop(0)
-
-                argument_value = argument_subtree.evaluate()
-                if argument_value % 1 != 0:
-                    arg_start = argument_subtree.position_start if argument_subtree.position_start != -1 else pos[0]
-                    arg_end = argument_subtree.position_end if argument_subtree.position_end != -1 else end_paren_span[
-                        1]
-
-                    raise E.CalculationError("Bit functions require integer values.", code="3041",
-                                             position_start=arg_start, position_end=arg_end)
-
-                try:
-                    return Number(bitnot(argument_value))
-                except Exception as e:
-                    raise E.SyntaxError(f"Error in {token}: {e}", code="8007", position_start=pos[0])
-            if token == "ln":
-                if tokens and tokens[0] == ',':
-                    err_pos = token_spans[0][0]
-                    raise E.SyntaxError(f"Comma in '{token}'", code="8008", position_start=err_pos)
-
-                if not tokens or tokens[0] != ')':
-                    err_pos = token_spans[0][0] if token_spans else pos[1] + 1
-                    raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code="3009",
-                                        position_start=err_pos)
-            tokens.pop(0)
-            end_paren_span = token_spans.pop(0)
-
-            argument_value = argument_subtree.evaluate()
-            if argument_value % 1 != 0:
-                arg_start = argument_subtree.position_start if argument_subtree.position_start != -1 else pos[0]
-                arg_end = argument_subtree.position_end if argument_subtree.position_end != -1 else end_paren_span[
-                    1]
-
-                raise E.CalculationError("Bit functions require integer values.", code="3041",
-                                         position_start=arg_start, position_end=arg_end)
-
-            try:
-                return Number(bitnot(argument_value))
-            except Exception as e:
-                raise E.SyntaxError(f"Error in {token}: {e}", code="8007", position_start=pos[0])
+        # elif token in plugin_operations:
+        #     if not tokens or tokens[0] != '(':
+        #         err_pos = token_spans[0][0] if token_spans else pos[1]
+        #         raise E.SyntaxError(f"Missing opening parenthesis after bit function {token}", code="3010",
+        #                             position_start=err_pos)
+        #
+        #     tokens.pop(0)
+        #     l_paren_pos = token_spans.pop(0)
+        #
+        #     argument_subtree = parse_bor(tokens, token_spans)
+        #
+        #     def get_second_arg_and_close():
+        #         if not tokens or tokens[0] != ',':
+        #             err_pos = token_spans[0][0] if token_spans else l_paren_pos[0]
+        #             raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009",
+        #                                 position_start=err_pos)
+        #         tokens.pop(0)
+        #         token_spans.pop(0)
+        #
+        #         base_sub = parse_bor(tokens, token_spans)
+        #
+        #         if not tokens or tokens[0] != ')':
+        #             raise E.SyntaxError(f"Missing closing parenthesis after '{token}' arguments.", code="3009",
+        #                                 position_start=l_paren_pos[0])
+        #         tokens.pop(0)
+        #         end_pos = token_spans.pop(0)
+        #         return base_sub, end_pos
+        #
+        #     def close_only():
+        #         if not tokens or tokens[0] != ')':
+        #             raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code="3009",
+        #                                 position_start=l_paren_pos[0])
+        #         tokens.pop(0)
+        #         token_spans.pop(0)
+        #         if tokens and tokens[0] == ',':
+        #             err_pos = token_spans[0][0]
+        #             raise E.SyntaxError(f"Comma in '{token}'", code="8008", position_start=err_pos)
+        #
+        #         if not tokens or tokens[0] != ')':
+        #             err_pos = token_spans[0][0] if token_spans else pos[1] + 1
+        #             raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code="3009",
+        #                                 position_start=err_pos)
+        #         tokens.pop(0)
+        #         end_paren_span = token_spans.pop(0)
+        #
+        #         argument_value = argument_subtree.evaluate()
+        #         if argument_value % 1 != 0:
+        #             arg_start = argument_subtree.position_start if argument_subtree.position_start != -1 else pos[0]
+        #             arg_end = argument_subtree.position_end if argument_subtree.position_end != -1 else end_paren_span[
+        #                 1]
+        #
+        #             raise E.CalculationError("Bit functions require integer values.", code="3041",
+        #                                      position_start=arg_start, position_end=arg_end)
+        #
+        #         try:
+        #             return Number(bitnot(argument_value))
+        #         except Exception as e:
+        #             raise E.SyntaxError(f"Error in {token}: {e}", code="8007", position_start=pos[0])
+        #     if token == "ln":
+        #         if tokens and tokens[0] == ',':
+        #             err_pos = token_spans[0][0]
+        #             raise E.SyntaxError(f"Comma in '{token}'", code="8008", position_start=err_pos)
+        #
+        #         if not tokens or tokens[0] != ')':
+        #             err_pos = token_spans[0][0] if token_spans else pos[1] + 1
+        #             raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code="3009",
+        #                                 position_start=err_pos)
+        #     tokens.pop(0)
+        #     end_paren_span = token_spans.pop(0)
+        #
+        #     argument_value = argument_subtree.evaluate()
+        #     if argument_value % 1 != 0:
+        #         arg_start = argument_subtree.position_start if argument_subtree.position_start != -1 else pos[0]
+        #         arg_end = argument_subtree.position_end if argument_subtree.position_end != -1 else end_paren_span[
+        #             1]
+        #
+        #         raise E.CalculationError("Bit functions require integer values.", code="3041",
+        #                                  position_start=arg_start, position_end=arg_end)
+        #
+        #     try:
+        #         return Number(bitnot(argument_value))
+        #     except Exception as e:
+        #         raise E.SyntaxError(f"Error in {token}: {e}", code="8007", position_start=pos[0])
 
 
         elif token in Science_Operations:

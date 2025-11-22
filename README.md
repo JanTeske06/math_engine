@@ -439,20 +439,20 @@ The exception object carries **precise start and end indices**:
 
 ```python
 import math_engine
-from math_engine import error as E
+from math_engine.utility import error as E
 
 # Disable visual printing to catch exceptions
 math_engine.change_setting("readable_error", False)
 
 try:
-    math_engine.evaluate("10.5 + 4.2.1")
+  math_engine.evaluate("10.5 + 4.2.1")
 except E.SyntaxError as e:
-    print(f"Error Code: {e.code}")
-    print(f"Location: {e.position_start} to {e.position_end}")
-    
-    # You can use these indices to highlight the error in your own UI
-    bad_part = e.equation[e.position_start : e.position_end + 1]
-    print(f"Invalid segment: '{bad_part}'")
+  print(f"Error Code: {e.code}")
+  print(f"Location: {e.position_start} to {e.position_end}")
+
+  # You can use these indices to highlight the error in your own UI
+  bad_part = e.equation[e.position_start: e.position_end + 1]
+  print(f"Invalid segment: '{bad_part}'")
 
 ```
 

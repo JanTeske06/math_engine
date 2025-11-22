@@ -1,5 +1,6 @@
-from decimal import Decimal, getcontext, Overflow
-from . import error as E
+from decimal import Decimal
+from ..utility import error as E
+
 
 # -----------------------------
 # AST node types

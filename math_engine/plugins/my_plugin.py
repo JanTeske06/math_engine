@@ -1,6 +1,6 @@
 import decimal
 
-import math_engine.plugin_manager
+
 #from ..plugin_manager import BasePlugin
 # from abc import ABC, abstractmethod
 #

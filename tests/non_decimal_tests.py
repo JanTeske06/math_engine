@@ -1,14 +1,4 @@
 import pytest
-from decimal import Decimal
-
-import math_engine
-from math_engine import error as E
-import pytest
-from unittest.mock import patch, mock_open
-import json
-import math_engine
-from math_engine import error as E
-from math_engine import config_manager
 
 # ---------------------------------------------------------------------------
 # Fixtures & Basis-Settings
@@ -32,8 +22,8 @@ DEFAULT_SETTINGS = {"decimal_places": 2,
 
 @pytest.fixture(autouse=True)
 def fresh_preset():
-    math_engine.config_manager.reset_settings()
-    settings = math_engine.config_manager.load_setting_value("all")
+    math_engine.utility.config_manager.reset_settings()
+    settings = math_engine.utility.config_manager.load_setting_value("all")
     return settings
 def load_defaults(**overrides):
     """Hilfsfunktion: Default-Settings + optionale Overrides laden."""
@@ -954,14 +944,6 @@ def test_38_pos_function_name_too_long_for_variable_check():
 # --- Kombinierter Integrationstest ---------------------------------------
 
 
-import pytest
-from unittest.mock import patch, mock_open
-import json
-import math_engine
-from math_engine import error as E
-from math_engine import config_manager
-
-
 # ---------------------------------------------------------------------------
 # 1. Tests für Datei-Fehler (IO / JSON Errors) in config_manager
 # ---------------------------------------------------------------------------
@@ -1091,11 +1073,9 @@ def test_load_preset_unknown_settings_error():
 
 
 import pytest
-from unittest.mock import patch, mock_open
+from unittest.mock import mock_open
 import json
-import math_engine
-from math_engine import error as E
-from math_engine import config_manager
+from math_engine.utility import config_manager
 
 
 # ---------------------------------------------------------------------------
@@ -1401,12 +1381,6 @@ def test_final_gap_load_preset_io_error():
             assert exc.value.code == "5002"
 
 
-import pytest
-from unittest.mock import patch, MagicMock, ANY
-import sys
-import math_engine.cli as cli
-
-
 # ---------------------------------------------------------------------------
 # 1. Test für den Argument-Modus (python -m math_engine "1+1")
 # ---------------------------------------------------------------------------
@@ -1416,7 +1390,7 @@ def test_main_arg_mode_success(capsys):
     # Wir simulieren sys.argv
     with patch.object(sys, 'argv', ["prog_name", "1+1"]):
         # Wir fälschen evaluate, damit wir nicht wirklich rechnen müssen
-        with patch("math_engine.cli.evaluate", return_value=2):
+        with patch("math_engine.cli.cli.evaluate", return_value=2):
             cli.main()
 
     # Wir prüfen, ob '2' auf der Konsole ausgegeben wurde
@@ -1428,7 +1402,7 @@ def test_main_arg_mode_error(capsys):
     """Testet Fehler im Argument-Modus (z.B. Division durch Null)."""
     with patch.object(sys, 'argv', ["prog_name", "1/0"]):
         # evaluate wirft hier einen Fehler
-        with patch("math_engine.cli.evaluate", side_effect=Exception("DivZero")):
+        with patch("math_engine.cli.cli.evaluate", side_effect=Exception("DivZero")):
             # Das Programm sollte sich mit Exit Code 1 beenden
             with pytest.raises(SystemExit):
                 cli.main()
@@ -1441,7 +1415,7 @@ def test_main_arg_mode_error(capsys):
 def test_main_starts_interactive_mode():
     """Wenn keine Argumente gegeben sind, soll der interaktive Modus starten."""
     with patch.object(sys, 'argv', ["prog_name"]):
-        with patch("math_engine.cli.run_interactive_mode") as mock_run:
+        with patch("math_engine.cli.cli.run_interactive_mode") as mock_run:
             cli.main()
             mock_run.assert_called_once()
 
@@ -1459,13 +1433,13 @@ def test_interactive_mode_basic_commands(capsys):
     user_inputs = ["help", "settings", "mem", "exit"]
 
     # Wir patchen PromptSession, damit prompt() unsere Liste zurückgibt statt zu warten
-    with patch("math_engine.cli.PromptSession") as MockSession:
+    with patch("math_engine.cli.cli.PromptSession") as MockSession:
         mock_instance = MockSession.return_value
         mock_instance.prompt.side_effect = user_inputs
 
         # Wir müssen auch load_all_settings und show_memory mocken, damit Tabellen kommen
-        with patch("math_engine.cli.load_all_settings", return_value={"debug": False}), \
-                patch("math_engine.cli.show_memory", return_value={"x": 10}):
+        with patch("math_engine.cli.cli.load_all_settings", return_value={"debug": False}), \
+                patch("math_engine.cli.cli.show_memory", return_value={"x": 10}):
             cli.run_interactive_mode()
 
             captured = capsys.readouterr()
@@ -1481,10 +1455,10 @@ def test_interactive_mode_math_calculation(capsys):
     """Testet eine einfache Rechnung im interaktiven Modus."""
     user_inputs = ["1 + 1", "exit"]
 
-    with patch("math_engine.cli.PromptSession") as MockSession:
+    with patch("math_engine.cli.cli.PromptSession") as MockSession:
         MockSession.return_value.prompt.side_effect = user_inputs
 
-        with patch("math_engine.cli.evaluate", return_value=2):
+        with patch("math_engine.cli.cli.evaluate", return_value=2):
             cli.run_interactive_mode()
 
             captured = capsys.readouterr()
@@ -1496,11 +1470,11 @@ def test_interactive_mode_math_error(capsys):
     """Testet, ob Mathe-Fehler im interaktiven Modus abgefangen werden."""
     user_inputs = ["1 / 0", "exit"]
 
-    with patch("math_engine.cli.PromptSession") as MockSession:
+    with patch("math_engine.cli.cli.PromptSession") as MockSession:
         MockSession.return_value.prompt.side_effect = user_inputs
 
         # evaluate wirft Fehler
-        with patch("math_engine.cli.evaluate", side_effect=Exception("Ouch")):
+        with patch("math_engine.cli.cli.evaluate", side_effect=Exception("Ouch")):
             cli.run_interactive_mode()
 
             captured = capsys.readouterr()
@@ -1517,10 +1491,10 @@ def test_command_set_setting(capsys):
     # 1. Test: Boolesche Werte (true/false)
     inputs = ["set setting debug true", "set setting verbose off", "set setting number 10", "exit"]
 
-    with patch("math_engine.cli.PromptSession") as MockSession:
+    with patch("math_engine.cli.cli.PromptSession") as MockSession:
         MockSession.return_value.prompt.side_effect = inputs
 
-        with patch("math_engine.cli.change_setting") as mock_change:
+        with patch("math_engine.cli.cli.change_setting") as mock_change:
             cli.run_interactive_mode()
 
             # Prüfen der Aufrufe
@@ -1536,10 +1510,10 @@ def test_command_set_mem(capsys):
     """Testet 'set mem key val'."""
     inputs = ["set mem x 42", "exit"]
 
-    with patch("math_engine.cli.PromptSession") as MockSession:
+    with patch("math_engine.cli.cli.PromptSession") as MockSession:
         MockSession.return_value.prompt.side_effect = inputs
 
-        with patch("math_engine.cli.set_memory") as mock_set:
+        with patch("math_engine.cli.cli.set_memory") as mock_set:
             cli.run_interactive_mode()
             mock_set.assert_called_with("x", "42")
 
@@ -1551,10 +1525,10 @@ def test_command_del_mem(capsys):
     """Testet 'del mem key' und 'del mem all'."""
     inputs = ["del mem x", "del mem all", "exit"]
 
-    with patch("math_engine.cli.PromptSession") as MockSession:
+    with patch("math_engine.cli.cli.PromptSession") as MockSession:
         MockSession.return_value.prompt.side_effect = inputs
 
-        with patch("math_engine.cli.delete_memory") as mock_del:
+        with patch("math_engine.cli.cli.delete_memory") as mock_del:
             cli.run_interactive_mode()
             mock_del.assert_any_call("x")
             mock_del.assert_any_call("all")
@@ -1564,10 +1538,10 @@ def test_command_reset(capsys):
     """Testet 'reset settings'."""
     inputs = ["reset settings", "exit"]
 
-    with patch("math_engine.cli.PromptSession") as MockSession:
+    with patch("math_engine.cli.cli.PromptSession") as MockSession:
         MockSession.return_value.prompt.side_effect = inputs
 
-        with patch("math_engine.cli.reset_settings") as mock_reset:
+        with patch("math_engine.cli.cli.reset_settings") as mock_reset:
             cli.run_interactive_mode()
             mock_reset.assert_called_once()
 
@@ -1578,10 +1552,10 @@ def test_command_load_preset(capsys):
     # damit shlex die inneren ' Quotes nicht entfernt.
     inputs = ["load preset \"{'a': 1}\"", "exit"]
 
-    with patch("math_engine.cli.PromptSession") as MockSession:
+    with patch("math_engine.cli.cli.PromptSession") as MockSession:
         MockSession.return_value.prompt.side_effect = inputs
 
-        with patch("math_engine.cli.load_preset") as mock_load:
+        with patch("math_engine.cli.cli.load_preset") as mock_load:
             cli.run_interactive_mode()
             mock_load.assert_called_with({'a': 1})
 
@@ -1600,7 +1574,7 @@ def test_variable_parsing_syntax():
     user_input = "a+b, a=5, b=10.5"
 
     # Wir wollen sehen, ob evaluate mit den richtigen kwargs aufgerufen wird
-    with patch("math_engine.cli.evaluate") as mock_eval:
+    with patch("math_engine.cli.cli.evaluate") as mock_eval:
         cli.process_input_and_evaluate(user_input)
 
         # Erwartung: evaluate("a+b", a=5, b=10.5, is_cli=True)
@@ -1613,7 +1587,7 @@ def test_variable_parsing_syntax():
 
 def test_ctrl_c_interrupt(capsys):
     """Simuliert Strg+C (KeyboardInterrupt)."""
-    with patch("math_engine.cli.PromptSession") as MockSession:
+    with patch("math_engine.cli.cli.PromptSession") as MockSession:
         # prompt() wirft KeyboardInterrupt
         MockSession.return_value.prompt.side_effect = KeyboardInterrupt
         cli.run_interactive_mode()
@@ -1624,7 +1598,7 @@ def test_ctrl_c_interrupt(capsys):
 
 def test_ctrl_d_eof(capsys):
     """Simuliert Strg+D (EOFError)."""
-    with patch("math_engine.cli.PromptSession") as MockSession:
+    with patch("math_engine.cli.cli.PromptSession") as MockSession:
         MockSession.return_value.prompt.side_effect = EOFError
         cli.run_interactive_mode()
 
@@ -1644,7 +1618,7 @@ def test_invalid_commands(capsys):
         "exit"
     ]
 
-    with patch("math_engine.cli.PromptSession") as MockSession:
+    with patch("math_engine.cli.cli.PromptSession") as MockSession:
         MockSession.return_value.prompt.side_effect = inputs
         cli.run_interactive_mode()
 
@@ -1670,17 +1644,17 @@ def test_handle_set_commands_edge_cases(capsys):
 
     # 1. Test: String Value (else-Zweig bei Typ-Konvertierung)
     # "abc" ist weder bool noch digit -> wird als String übernommen
-    with patch("math_engine.cli.change_setting") as mock_change:
+    with patch("math_engine.cli.cli.change_setting") as mock_change:
         cli.handle_set_command(["setting", "format", "abc"])
         mock_change.assert_called_with("format", "abc")
 
     # 2. Test: Exception beim Setzen (Deckt Zeile 116-119 ab)
-    with patch("math_engine.cli.change_setting", side_effect=Exception("Boom")):
+    with patch("math_engine.cli.cli.change_setting", side_effect=Exception("Boom")):
         cli.handle_set_command(["setting", "k", "v"])
         assert "Error changing setting" in capsys.readouterr().out
 
     # 3. Test: Exception bei Memory (Deckt Zeile 127-130 ab)
-    with patch("math_engine.cli.set_memory", side_effect=Exception("Bang")):
+    with patch("math_engine.cli.cli.set_memory", side_effect=Exception("Bang")):
         cli.handle_set_command(["mem", "k", "v"])
         assert "Error setting memory" in capsys.readouterr().out
 
@@ -1697,7 +1671,7 @@ def test_handle_del_errors(capsys):
     assert "Missing key" in capsys.readouterr().out
 
     # 3. Exception beim Löschen
-    with patch("math_engine.cli.delete_memory", side_effect=Exception("Ouch")):
+    with patch("math_engine.cli.cli.delete_memory", side_effect=Exception("Ouch")):
         cli.handle_del_command(["mem", "key"])
         assert "Error:" in capsys.readouterr().out
 
@@ -1710,7 +1684,7 @@ def test_handle_reset_errors(capsys):
     assert "Usage:" in capsys.readouterr().out
 
     # 2. Exception bei reset mem
-    with patch("math_engine.cli.delete_memory", side_effect=Exception("Fail")):
+    with patch("math_engine.cli.cli.delete_memory", side_effect=Exception("Fail")):
         cli.handle_reset_command(["mem"])
         assert "Error:" in capsys.readouterr().out
 
@@ -1727,7 +1701,7 @@ def test_handle_load_errors(capsys):
     assert "Input must be a dictionary" in capsys.readouterr().out
 
     # 3. Exception während load_preset
-    with patch("math_engine.cli.load_preset", side_effect=Exception("Corrupt")):
+    with patch("math_engine.cli.cli.load_preset", side_effect=Exception("Corrupt")):
         cli.handle_load_command(["preset", "{'a': 1}"])
         assert "Error loading preset" in capsys.readouterr().out
 
@@ -1739,7 +1713,7 @@ def test_process_input_value_error_fallback():
     """
     user_input = "var, var=abc"
 
-    with patch("math_engine.cli.evaluate") as mock_eval:
+    with patch("math_engine.cli.cli.evaluate") as mock_eval:
         cli.process_input_and_evaluate(user_input)
 
         # Prüfen, ob 'abc' als String angekommen ist
@@ -1758,7 +1732,7 @@ def test_process_input_parentheses():
     """
     # Eingabe: Eine Funktion mit Argumenten in Klammern
     # Die Logik muss erkennen: '(' -> level rauf, ')' -> level runter
-    with patch("math_engine.cli.evaluate") as mock_eval:
+    with patch("math_engine.cli.cli.evaluate") as mock_eval:
         cli.process_input_and_evaluate("max(1, 2)")
         # Wichtig: Das Komma durfte NICHT splitten!
         mock_eval.assert_called_with("max(1, 2)", is_cli=True)
@@ -1771,7 +1745,7 @@ def test_interactive_mode_empty_input(capsys):
     """
     inputs = ["", "exit"]
 
-    with patch("math_engine.cli.PromptSession") as MockSession:
+    with patch("math_engine.cli.cli.PromptSession") as MockSession:
         MockSession.return_value.prompt.side_effect = inputs
         cli.run_interactive_mode()
 
@@ -1785,11 +1759,11 @@ def test_mem_command_non_dict_output(capsys):
     Deckt Zeile 25 ab (else-Zweig bei 'mem'):
     Falls show_memory() kein Dict zurückgibt (z.B. String oder None).
     """
-    with patch("math_engine.cli.PromptSession") as MockSession:
+    with patch("math_engine.cli.cli.PromptSession") as MockSession:
         MockSession.return_value.prompt.side_effect = ["mem", "exit"]
 
         # Wir zwingen show_memory dazu, einen String statt Dict zu liefern
-        with patch("math_engine.cli.show_memory", return_value="Keine Daten"):
+        with patch("math_engine.cli.cli.show_memory", return_value="Keine Daten"):
             cli.run_interactive_mode()
 
     captured = capsys.readouterr()
@@ -1802,7 +1776,7 @@ def test_reset_mem_success_msg(capsys):
     Deckt Zeile 130 ab: Erfolgsmeldung nach 'delete_memory("all")'.
     """
     # Wir rufen handle_reset_command direkt auf für 'mem'
-    with patch("math_engine.cli.delete_memory") as mock_del:
+    with patch("math_engine.cli.cli.delete_memory") as mock_del:
         cli.handle_reset_command(["mem"])
         mock_del.assert_called_with("all")
 
@@ -1822,11 +1796,8 @@ def test_set_mem_usage_error(capsys):
     assert "set mem <key> <value>" in captured.out
 
 
-import pytest
-from unittest.mock import patch, MagicMock
 import sys
-import math_engine.cli as cli
-from math_engine import error as E
+import math_engine.cli.cli as cli
 
 
 # ---------------------------------------------------------------------------
@@ -1836,7 +1807,7 @@ from math_engine import error as E
 def test_main_with_expression_success(capsys):
     """Testet den Pfad: Argument übergeben -> Berechnung erfolgreich -> Print."""
     with patch.object(sys, 'argv', ["math-engine", "1+1"]):
-        with patch("math_engine.cli.evaluate", return_value=2):
+        with patch("math_engine.cli.cli.evaluate", return_value=2):
             cli.main()
 
     captured = capsys.readouterr()
@@ -1849,7 +1820,7 @@ def test_main_with_expression_error(capsys):
     """
     with patch.object(sys, 'argv', ["math-engine", "bad_input"]):
         # Wir simulieren einen Fehler in evaluate
-        with patch("math_engine.cli.evaluate", side_effect=Exception("Critical Math Fail")):
+        with patch("math_engine.cli.cli.evaluate", side_effect=Exception("Critical Math Fail")):
             # sys.exit(1) wird erwartet
             with pytest.raises(SystemExit) as exc:
                 cli.main()
@@ -1863,7 +1834,7 @@ def test_main_with_expression_error(capsys):
 def test_main_interactive_start():
     """Deckt den else-Zweig ab (keine Args -> Interactive Mode)."""
     with patch.object(sys, 'argv', ["math-engine"]):
-        with patch("math_engine.cli.run_interactive_mode") as mock_run:
+        with patch("math_engine.cli.cli.run_interactive_mode") as mock_run:
             cli.main()
             mock_run.assert_called_once()
 
@@ -1879,7 +1850,7 @@ def test_interactive_loop_empty_input(capsys):
     """
     inputs = ["", "   ", "exit"]
 
-    with patch("math_engine.cli.PromptSession") as MockSession:
+    with patch("math_engine.cli.cli.PromptSession") as MockSession:
         MockSession.return_value.prompt.side_effect = inputs
         cli.run_interactive_mode()
 
@@ -1894,11 +1865,11 @@ def test_interactive_mem_display_non_dict(capsys):
     Wenn show_memory() kein Dict zurückgibt (z.B. None oder String).
     """
     inputs = ["mem", "exit"]
-    with patch("math_engine.cli.PromptSession") as MockSession:
+    with patch("math_engine.cli.cli.PromptSession") as MockSession:
         MockSession.return_value.prompt.side_effect = inputs
 
         # show_memory gibt String statt Dict zurück
-        with patch("math_engine.cli.show_memory", return_value="Keine Variablen"):
+        with patch("math_engine.cli.cli.show_memory", return_value="Keine Variablen"):
             cli.run_interactive_mode()
 
     captured = capsys.readouterr()
@@ -1920,7 +1891,7 @@ def test_process_input_complex_brackets():
     # Das zweite Komma ist außerhalb -> muss splitten.
     input_str = "test(1, 2), a=1"
 
-    with patch("math_engine.cli.evaluate") as mock_eval:
+    with patch("math_engine.cli.cli.evaluate") as mock_eval:
         cli.process_input_and_evaluate(input_str)
 
         # Erwartung: Ausdruck="test(1, 2)", Variable a=1
@@ -1933,7 +1904,7 @@ def test_process_input_value_conversion_error():
     Wenn int() fehlschlägt, muss der String-Wert genommen werden.
     """
     input_str = "x, x=some_text"
-    with patch("math_engine.cli.evaluate") as mock_eval:
+    with patch("math_engine.cli.cli.evaluate") as mock_eval:
         cli.process_input_and_evaluate(input_str)
         mock_eval.assert_called_with("x", x="some_text", is_cli=True)
 
@@ -1945,19 +1916,19 @@ def test_process_input_value_conversion_error():
 def test_handle_reset_settings_and_mem(capsys):
     """Deckt handle_reset_command komplett ab."""
     # 1. reset settings
-    with patch("math_engine.cli.reset_settings") as mock_rst:
+    with patch("math_engine.cli.cli.reset_settings") as mock_rst:
         cli.handle_reset_command(["settings"])
         mock_rst.assert_called_once()
         assert "All settings reset" in capsys.readouterr().out
 
     # 2. reset mem (Erfolg)
-    with patch("math_engine.cli.delete_memory") as mock_del:
+    with patch("math_engine.cli.cli.delete_memory") as mock_del:
         cli.handle_reset_command(["mem"])
         mock_del.assert_called_with("all")
         assert "All memory variables deleted" in capsys.readouterr().out
 
     # 3. reset mem (Fehler/Exception)
-    with patch("math_engine.cli.delete_memory", side_effect=Exception("MemErr")):
+    with patch("math_engine.cli.cli.delete_memory", side_effect=Exception("MemErr")):
         cli.handle_reset_command(["mem"])
         assert "Error:" in capsys.readouterr().out
 
@@ -1993,14 +1964,6 @@ def test_print_dict_as_table_empty(capsys):
     cli.print_dict_as_table("Titel", {})
     captured = capsys.readouterr()
     assert "No titel found" in captured.out
-
-
-import pytest
-from unittest.mock import patch
-from decimal import Decimal
-import math_engine
-from math_engine import error as E
-from math_engine import calculator
 
 
 # ---------------------------------------------------------------------------
@@ -2143,14 +2106,6 @@ def test_calc_comment_parsing():
     assert exc.value.code == "3012"
 
 
-import pytest
-from unittest.mock import patch
-from decimal import Decimal
-import math_engine
-from math_engine import error as E
-from math_engine import calculator
-
-
 # ---------------------------------------------------------------------------
 # 1. Komplexe Operatoren
 # ---------------------------------------------------------------------------
@@ -2263,10 +2218,9 @@ def test_calc_implicit_multiplication():
 # 5. Error 9999 (Unknown Error) Triggern
 # ---------------------------------------------------------------------------
 
-import pytest
 from decimal import Decimal
 import math_engine
-from math_engine import error as E
+from math_engine.utility import error as E
 
 
 # ---------------------------------------------------------------------------
@@ -2370,8 +2324,7 @@ def test_calc_function_name_validation():
 
 import pytest
 from unittest.mock import patch
-import math
-import math_engine.ScientificEngine as SciEng
+import math_engine.calculator.ScientificEngine as SciEng
 
 
 # ---------------------------------------------------------------------------
@@ -2454,4 +2407,4 @@ def test_all_bit_operations_combined_expression():
     assert result == 344
 
 def test_reset():
-    math_engine.config_manager.reset_settings_tests()
+    math_engine.utility.config_manager.reset_settings_tests()
