@@ -1,5 +1,5 @@
 
-# Math Engine v0.6.3 
+# Math Engine v0.6.4 
 
 
 [![PyPI version](https://badge.fury.io/py/math-engine.svg)](https://badge.fury.io/py/math-engine)

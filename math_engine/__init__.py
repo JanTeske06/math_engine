@@ -7,7 +7,7 @@ from .utility import config_manager as config_manager
 from typing import Optional
 from typing import Union
 from typing import Any, Mapping
-__version__ = "0.6.3"
+__version__ = "0.6.4"
 memory = {}
 
 def set_memory(key_value: str, value:str):
