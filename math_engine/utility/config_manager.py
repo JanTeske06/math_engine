@@ -76,6 +76,17 @@ def load_setting_description(key_value):
         return settings_dict.get(key_value, 0)
 
 def force_overwrite_settings(settings:dict):
+    """Write a settings dictionary directly to ``config.json`` without validation.
+
+    Args:
+        settings: The complete settings dictionary to persist.
+
+    Returns:
+        int: ``1`` on success.
+
+    Raises:
+        E.ConfigError: If the file cannot be written (code ``5002``).
+    """
     try:
             with open(config_json, 'w', encoding='utf-8') as f:
                 json.dump(settings, f, indent=4)
@@ -85,6 +96,14 @@ def force_overwrite_settings(settings:dict):
 
 
 def reset_settings_tests():
+    """Reset settings to test-safe defaults (``readable_error=False``).
+
+    Same as ``reset_settings()`` but explicitly sets ``readable_error``
+    to ``False`` so that exceptions propagate during test execution.
+
+    Returns:
+        int: ``1`` on success.
+    """
     x = {
         "decimal_places": 2,
         "use_degrees": False,
@@ -106,6 +125,13 @@ def reset_settings_tests():
         return 1
 
 def reset_settings():
+    """Reset all settings to their factory default values.
+
+    Overwrites ``config.json`` with the hardcoded default dictionary.
+
+    Returns:
+        int: ``1`` on success.
+    """
     x = {
         "decimal_places": 2,
         "use_degrees": False,
@@ -127,10 +153,32 @@ def reset_settings():
         return 1
 
 def save_setting(key_value, new_value):
-    """Persist the given settings back to config.json, with type validation.
+    """Persist a single setting to ``config.json`` with full validation.
 
-    Overwrites the existing file with pretty-printed JSON (indent=4).
-    Checks if new_value matches the type of the old value.
+    Validation rules applied before writing:
+
+    1. **Type checking** -- The new value must match the Python type of the
+       existing value.  Two special cases are tolerated:
+
+       * ``bool`` is accepted where ``int`` is expected (since ``bool``
+         is a subclass of ``int`` in Python).
+       * ``int`` 0 or 1 is accepted where ``bool`` is expected; any other
+         integer raises :class:`E.ConfigError`.
+
+       If the key does not yet exist in the config, the value is stored
+       without type checking (allowing users to introduce new settings).
+
+    2. **Prefix normalization** (``default_output_format`` only) --
+       User-supplied format strings like ``"hex:"``, ``"h:"``, or ``"hexadecimal:"``
+       are all normalized to a single canonical prefix (e.g. ``"hexadecimal:"``).
+       If the value is not recognized, an :class:`E.ConfigError` is raised.
+
+    3. **Mutual exclusion** (``only_hex`` / ``only_binary`` / ``only_octal``) --
+       Enabling one of these flags automatically disables the other two so
+       that at most one non-decimal output mode is active at a time.
+
+    4. **Word-size validation** (``word_size``) --
+       Only the values ``0``, ``8``, ``16``, ``32``, and ``64`` are permitted.
 
     Parameters
     ----------
@@ -142,7 +190,14 @@ def save_setting(key_value, new_value):
     Returns
     -------
     int
-        1 on success, -1 on errpr
+        ``1`` on success.
+
+    Raises
+    ------
+    E.ConfigError
+        On type mismatch (code ``5000``), unrecognized output format
+        (code ``5002``), invalid word size (code ``5003``), or file I/O
+        failure (code ``5002``).
     """
 
     settings = load_setting_value("all")
@@ -181,6 +236,10 @@ def save_setting(key_value, new_value):
 
         # 3. SAVE if type check is successful
 
+    # --- Prefix normalization for "default_output_format" ---
+    # All recognized short and long prefix aliases (e.g. "h:", "hex:",
+    # "hexadecimal:") are mapped to a single canonical form so that
+    # downstream code only needs to handle one spelling per format.
     allowed_prefix = (
         "dec:", "d:", "decimal:", "int:", "i:", "integer:", "float:", "f:",
         "bool:", "bo:", "boolean:", "hex:", "h:", "hexadecimal:",
@@ -195,11 +254,16 @@ def save_setting(key_value, new_value):
     if key_value == "default_output_format":
 
         try:
+            # Attempt to match the user-supplied value against every known
+            # prefix alias and normalize it to the canonical long form.
             for prefix in allowed_prefix:
                 if new_value_str_lower.startswith(prefix):
 
                     prefix_found = True
 
+                    # Normalize by inspecting the first distinguishing
+                    # character(s) of the matched alias and mapping to the
+                    # canonical long-form prefix.
                     if prefix.startswith("s"):
                         final_prefix = "string:"
                     elif prefix.startswith("bo"):
@@ -218,7 +282,9 @@ def save_setting(key_value, new_value):
                         final_prefix = "octal:"
                     break
 
-
+            # Fallback: the user may have typed just the name without a
+            # trailing colon (e.g. "hex" instead of "hex:").  Build a set
+            # of bare names and check against it.
             if not prefix_found:
                 if ":" not in new_value_str_lower:
                     allowed_pure_names = {p.strip(":") for p in allowed_prefix}
@@ -228,7 +294,8 @@ def save_setting(key_value, new_value):
                         prefix_found = True
 
             if not prefix_found:
-                allowed_prefix_str = ', '.join(sorted(allowed_pure_names))  # Sortiere für Lesbarkeit
+                # Sort the allowed names for a readable error message.
+                allowed_prefix_str = ', '.join(sorted(allowed_pure_names))
                 raise E.ConfigError(f"'{new_value}' is not a recognized output format. Allowed formats: \n"
                                     f"{allowed_prefix_str}", code="5002")
 
@@ -243,6 +310,8 @@ def save_setting(key_value, new_value):
 
     settings[key_value] = final_prefix
 
+    # Mutual exclusion: only one non-decimal output mode may be active.
+    # Enabling one flag automatically clears the other two.
     if key_value == "only_hex":
         settings["only_binary"] = False
         settings["only_octal"] = False
@@ -253,7 +322,7 @@ def save_setting(key_value, new_value):
         settings["only_binary"] = False
         settings["only_hex"] = False
 
-
+    # Word size must be one of the standard bit-width values (or 0 for unlimited).
     if key_value == "word_size":
         if new_value not in [0,8,16,32,64]:
             raise E.ConfigError(f"Invalid word_size value '{new_value}'", code = "5003")
@@ -268,6 +337,21 @@ def save_setting(key_value, new_value):
         raise E.ConfigError(f"Could not save configuration file: {e}", code = "5002")
 
 def load_preset(settings:dict):
+    """Replace the entire configuration with the given dictionary.
+
+    Validates that the new dictionary has the same number of keys as the
+    current config before writing.
+
+    Args:
+        settings: A complete settings dictionary.
+
+    Returns:
+        int: ``1`` on success.
+
+    Raises:
+        E.SyntaxError:  If the dictionary length doesn't match (code ``5002``).
+        E.ConfigError:  If the file cannot be written (code ``5002``).
+    """
     try:
         if len(load_setting_value("all")) != len(settings):
             raise E.SyntaxError("Invalid dict.", code = "5002")

@@ -1,32 +1,29 @@
-# ScientificEngine
-"""""
-Lightweight scientific function layer used by the MathEngine.
+"""
+Lightweight scientific function evaluation layer for math_engine.
 
-Responsibilities
-----------------
-- Provide numeric results for:
-  - π (pi) via `isPi`
-  - sin/cos/tan (optionally in degrees) via `isSCT`
-  - logarithms (natural or with base) via `isLog`
-  - e^x via `isE`
-  - square root via `isRoot`
-- Offer a single dispatch entry `unknown_function(...)` used by MathEngine.
+This module provides numeric evaluators for mathematical constants and
+functions used by the expression parser:
 
-Notes
------
-- All functions return either a numeric result (float) or `False`/error-string
-  to indicate "not applicable" or a handled error.
-- Degree handling for sin/cos/tan is controlled by the global
-  `degree_setting_sincostan` (0 = radians, 1 = degrees).
-- This module intentionally keeps parsing *very* simple: it expects inputs like
-  "sin(1.2)" or "log(10, 2)". Validation is minimal by design.
-"""""
+- ``isPi()``              — returns the value of pi
+- ``isSCT()``             — evaluates sin, cos, tan (with optional degree mode)
+- ``isLog()``             — evaluates natural log or log with arbitrary base
+- ``isE()``               — evaluates e^x (exponential function)
+- ``isRoot()``            — evaluates square root
+- ``unknown_function()``  — dispatcher that routes a string to the correct evaluator
+
+All functions accept string inputs of the form ``"sin(1.5)"`` or ``"log(10,2)"``
+and return a ``float`` result, ``False`` (not applicable), or an ``"ERROR:..."``
+string for handled failures.
+
+The global :data:`degree_setting_sincostan` controls whether trigonometric
+functions interpret their arguments as radians (``0``) or degrees (``1``).
+"""
 
 import math
 
 
 # 0 = interpret sin/cos/tan input as radians; 1 = interpret as degrees
-degree_setting_sincostan = 0  # 0 = number, 1 = degrees
+degree_setting_sincostan = 0
 
 
 def isPi(problem):
@@ -155,17 +152,30 @@ def isLog(problem):
 
 
 def isE(problem):
-    """Evaluate e^(x) from an 'e(... )' string.
+    """Evaluate the exponential function ``e^(x)`` from an ``"e(...)"`` string.
+
+    The function checks whether *problem* contains the character ``"e"``.
+    If so, it extracts the numeric substring between the first ``"("`` and
+    the first ``")"`` and returns ``math.exp(x)``  (i.e. ``e`` raised to
+    that power).
+
+    Parameters
+    ----------
+    problem : str
+        A string such as ``"e(2)"`` or ``"e^(3.5)"``.
 
     Returns
     -------
     float | False
-        float result if input contains 'e', else False
+        The computed ``e^x`` value, or ``False`` if the string does not
+        contain ``"e"``.
     """
     if "e" in problem:
+        # Locate the parenthesized argument
         start_index = problem.find('(')
         end_index = problem.find(')')
 
+        # Extract the exponent between the parentheses and compute e^x
         clean_number = problem[start_index + 1: end_index]
         ergebnis = math.exp(float(clean_number))
         return ergebnis
@@ -174,17 +184,29 @@ def isE(problem):
 
 
 def isRoot(problem):
-    """Evaluate square root from a '√(... )' string.
+    r"""Evaluate the square root from a string containing the radical sign.
+
+    The function checks whether *problem* contains the Unicode radical
+    character (U+221A).  If so, it extracts the numeric substring between
+    the first ``(`` and the first ``)`` and returns ``math.sqrt(x)``.
+
+    Parameters
+    ----------
+    problem : str
+        A string such as ``"\u221a(9)"`` or ``"sqrt(16)"``.
 
     Returns
     -------
     float | False
-        float result if input contains '√', else False
+        The computed square root, or ``False`` if the string does not
+        contain the radical character.
     """
     if "√" in problem:
+        # Locate the parenthesized argument
         start_index = problem.find('(')
         end_index = problem.find(')')
 
+        # Extract the radicand and compute its square root
         clean_number = problem[start_index + 1: end_index]
         ergebnis = math.sqrt(float(clean_number))
         return ergebnis
@@ -195,33 +217,55 @@ def isRoot(problem):
 def unknown_function(received_string):
     """Dispatch a received function string to the matching evaluator.
 
+    This acts as the single entry point for all scientific-function
+    evaluation.  It inspects *received_string* for known keywords and
+    delegates to the appropriate evaluator function.
+
+    The dispatch order matters: more specific checks (e.g. ``"sin"``,
+    ``"log"``) are tested before the generic ``"e"`` check so that
+    strings like ``"sine"`` do not accidentally match ``isE()``.
+
     Supported patterns
     ------------------
-    - "π" / "pi"
-    - "sin(...)" / "cos(...)" / "tan(...)"
-    - "log(...)" or "log(x, b)"
-    - "√(...)"  (square root)
-    - "e(...)"  (exp)
+    - ``"pi"`` / ``"PI"`` / the Unicode character pi -- delegates to :func:`isPi`
+    - ``"sin(...)"`` / ``"cos(...)"`` / ``"tan(...)"`` -- delegates to :func:`isSCT`
+    - ``"log(...)"`` or ``"log(x, b)"`` -- delegates to :func:`isLog`
+    - ``"sqrt(...)"`` or the radical character -- delegates to :func:`isRoot`
+    - ``"e(...)"`` -- delegates to :func:`isE`
+
+    Parameters
+    ----------
+    received_string : str
+        The raw function string extracted by the tokenizer.
 
     Returns
     -------
     float | bool | str
-        - numeric value on success
-        - False if operation cannot be determined
-        - or an "ERROR: ..." string for handled errors (g., log input issues)
+        - Numeric ``float`` on successful evaluation.
+        - ``False`` if the operation cannot be determined.
+        - An ``"ERROR: ..."`` string for handled errors (e.g., invalid
+          logarithm input).
     """
+    # --- Dispatch chain (order is significant) ---
+
+    # 1. Pi constant -- exact match on the symbol or the word
     if received_string == "π" or received_string.lower() == "pi":
         ergebnis = isPi()
 
+    # 2. Trigonometric functions
     elif "sin" in received_string or "cos" in received_string or "tan" in received_string:
         ergebnis = isSCT(received_string)
 
+    # 3. Logarithm (natural or with base)
     elif "log" in received_string:
         ergebnis = isLog(received_string)
 
+    # 4. Square root (radical character)
     elif "√" in received_string:
         ergebnis = isRoot(received_string)
 
+    # 5. Exponential -- checked last because "e" is a very common
+    #    substring and would match prematurely if tested earlier
     elif "e" in received_string:
         ergebnis = isE(received_string)
 

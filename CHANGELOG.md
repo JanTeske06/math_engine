@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.5] - 2026-04-09
+
+### Added
+- **Comprehensive Code Documentation:** Added professional English docstrings and inline comments to every module, class, and function across the entire codebase.
+- **Technical Documentation:** Added `DOCUMENTATION.md` with full architecture reference, module documentation, API reference, error code catalog, parser internals, and build guide.
+
+---
+
 ## [0.6.0] - 2025-11-18
 
 ### Added

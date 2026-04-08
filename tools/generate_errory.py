@@ -1,3 +1,14 @@
+"""Generate the ERRORS.md reference document from the error code registry.
+
+Reads every error code and its human-readable message from
+:data:`math_engine.error.ERROR_MESSAGES` and writes them as a Markdown table
+into ``ERRORS.md`` at the project root.
+
+Usage::
+
+    python generate_errory.py
+"""
+
 import os
 import sys
 
@@ -13,6 +24,12 @@ OUTPUT_FILE = os.path.join(project_root, "ERRORS.md")
 
 
 def main():
+    """Read all entries from ``ERROR_MESSAGES`` and write them to ``ERRORS.md``.
+
+    Each entry is rendered as a row in a two-column Markdown table
+    (Code | Message).  Pipe characters inside messages are escaped so
+    they do not break the table formatting.
+    """
     print(f"Generiere Datei in: {OUTPUT_FILE}...")
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:

@@ -1,15 +1,33 @@
-# calculator.py
 """
-Core calculation engine for the Advanced Python Calculator.
+Core calculation engine for math_engine.
 
-Pipeline
---------
-1) Tokenizer: converts a raw input string into a flat list of tokens.
-2) Parser (AST): builds an Abstract Syntax Tree (recursive-descent, precedence aware).
-3) Evaluator / Solver:
-   - Evaluate pure numeric expressions
-   - Solve linear equations with a single variable (e.g. 'x')
-4) Formatter: renders results using Decimal/Fraction and user preferences.
+This module contains the entire evaluation pipeline from raw string input to
+fully typed output value.  Every public calculation request flows through
+:func:`calculate`, which delegates to internal stages:
+
+1. **Tokenizer** (:func:`translator`) -- converts a raw input string into a
+   flat list of tokens (numbers, operators, parentheses, function names,
+   variable placeholders) together with character-level position spans used
+   for error reporting.
+2. **Parser** (:func:`ast`) -- builds an Abstract Syntax Tree (AST) via
+   recursive-descent parsing with full operator-precedence support.  The
+   precedence chain (lowest to highest) is:
+   ``parse_gleichung`` > ``parse_bor`` > ``parse_bxor`` > ``parse_band``
+   > ``parse_shift`` > ``parse_sum`` > ``parse_term`` > ``parse_power``
+   > ``parse_unary`` > ``parse_factor``.
+3. **Evaluator / Solver** -- either evaluates the AST numerically, solves a
+   linear equation for a single variable via :func:`solve`, or performs a
+   pure equality check (``==``).
+4. **Formatter** (:func:`cleanup`) -- renders results using ``Decimal`` /
+   ``Fraction`` precision and the user's ``decimal_places`` /
+   ``fractions`` settings.
+5. **Output converter** (inside :func:`calculate`) -- applies the output
+   prefix (``hex:``, ``int:``, ``bool:``, ``bin:``, ``oct:``, ``str:``,
+   ``float:``, ``decimal:``) and returns the final Python-typed value.
+
+Public entry point
+------------------
+:func:`calculate`
 """
 
 from decimal import Decimal, getcontext, Overflow, DivisionImpossible, InvalidOperation
@@ -24,16 +42,28 @@ from ..utility.plugin_manager import function_register
 from ..utility.non_decimal_utility import int_to_value, value_to_int, non_decimal_scan, apply_word_limit, setbit, bitor, bitand, bitnot, bitxor, shl, shr, clrbit, togbit, testbit
 from .AST_Node_Types import Number, BinOp, Variable
 
-# Debug toggle for optional prints in this module
+# ---------------------------------------------------------------------------
+# Module-level constants and configuration
+# ---------------------------------------------------------------------------
+
+# Debug toggle — set to True via the ``debug`` setting to print token lists
+# and AST trees during evaluation.
 debug = False
 
-# Supported operators / functions (kept as simple lists for quick membership checks)
+# Supported operators (used for membership checks in the tokenizer and parser).
 Operations = ["+", "-", "*", "/", "=", "^", ">>", "<<", "<", ">", "|","&" ]
+
+# Built-in scientific function names recognized by the tokenizer.
 Science_Operations = ["sin", "cos", "tan", "10^x", "log", "e^", "π", "√"]
+
+# Built-in bit manipulation function names recognized by the tokenizer.
 Bit_Operations = ["setbit", "bitxor", "shl", "shr", "bitnot", "bitand", "bitor", "clrbit", "togbit", "testbit"]
+
+# Functions registered by plugins at runtime (populated by plugin_manager).
 plugin_operations = []
 
-# Global Decimal precision used by this module (UI may also enforce this before calls)
+# Global Decimal precision ceiling.  Dynamically adjusted per-calculation in
+# ``calculate()`` based on input size and the ``decimal_places`` setting.
 getcontext().prec = 10000
 
 
@@ -46,6 +76,9 @@ getcontext().prec = 10000
 #     'bitor', 'bitxor', 'shl', 'shr', 'clrbit', 'togbit', 'testbit'
 # }
 
+# Maps textual function prefixes to their internal token names.
+# Entries ending with ``(`` represent callable functions (require parentheses);
+# entries without (like ``"pi"``) represent constants.
 RAW_FUNCTION_MAP = {
     "sin(": 'sin',
     "cos(": 'cos',
@@ -69,10 +102,15 @@ RAW_FUNCTION_MAP = {
     "testbit(": "testbit"
 }
 
+# Set of all function token names that require an opening parenthesis.
+# Used to detect bare function names without ``(`` (e.g., ``sin 5`` → error).
 PURE_FUNCTION_NAMES = {
     token for start_str, token in RAW_FUNCTION_MAP.items()
     if start_str.endswith('(')
 }
+
+# Pre-computed lookup: ``{prefix_string: (token_name, prefix_length)}``.
+# Enables O(1) function recognition during tokenization.
 FUNCTION_STARTS_OPTIMIZED = {
     start_str: (token, len(start_str))
     for start_str, token in RAW_FUNCTION_MAP.items()
@@ -80,6 +118,12 @@ FUNCTION_STARTS_OPTIMIZED = {
 
 
 def update_function_globals():
+    """Rebuild ``PURE_FUNCTION_NAMES`` and ``FUNCTION_STARTS_OPTIMIZED`` from
+    ``RAW_FUNCTION_MAP``.
+
+    Called after a plugin registers a new function to ensure the tokenizer
+    recognizes the newly added function name.
+    """
     global RAW_FUNCTION_MAP
     global PURE_FUNCTION_NAMES
     global FUNCTION_STARTS_OPTIMIZED
@@ -95,35 +139,84 @@ def update_function_globals():
 
 
 def translator(problem, custom_variables, settings):
-    """Convert raw input string into a token list (numbers, ops, parens, variables, functions).
+    """Tokenize a raw mathematical expression into a flat token list.
 
-    Notes:
-    - Inserts implicit multiplication where needed (e.g., '5x' -> '5', '*', 'var0').
-    - Maps '≈' to '=' so the rest of the pipeline can handle equality uniformly.
+    Converts the input string into a list of tokens suitable for the
+    recursive-descent parser.  Each token is one of:
+
+    * ``Decimal`` -- a numeric literal (integer, float, or scientific notation)
+    * ``str`` operator -- ``'+', '-', '*', '/', '**', '=', '<<', '>>', '|', '&', '^'``
+    * ``str`` punctuation -- ``'(', ')', ','``
+    * ``str`` function name -- ``'sin', 'cos', 'tan', 'log', 'e^', 'sqrt', ...``
+    * ``str`` variable placeholder -- ``'var0', 'var1', ...``
+
+    Processing phases (executed in order during a single left-to-right scan):
+
+    1. **Function matching** -- longest-prefix lookup against
+       ``FUNCTION_STARTS_OPTIMIZED`` (includes plugin-registered functions).
+    2. **Number parsing** -- handles integers, decimals, scientific notation
+       (``1.5e-3``), and non-decimal bases (``0x``, ``0b``, ``0o``) when the
+       corresponding ``only_*`` setting is active.
+    3. **Operator recognition** -- single- and double-char operators
+       (``*`` vs ``**``, ``<`` vs ``<<``).
+    4. **Hex-mode digit collection** -- when ``only_hex`` is active, bare
+       ``A-F`` characters are collected as hex digits.
+    5. **Pi constant** -- the ``'pi'`` literal is resolved here as well as the
+       Unicode ``'pi'`` glyph.
+    6. **Variable fallback** -- any remaining single alpha character is
+       assigned a ``var<N>`` placeholder; multi-character unknowns raise an error.
+    7. **Implicit multiplication pass** -- a second sweep inserts ``'*'`` between
+       adjacent tokens that imply multiplication (e.g., ``2(3)``, ``x y``,
+       ``)(``).
+
+    The function also maps the Unicode ``'approx'`` sign (``U+2248``) to ``'='`` so the
+    rest of the pipeline handles approximate equality uniformly.
+
+    Args:
+        problem:          The raw expression string (no prefix).
+        custom_variables: Mapping of user-defined variable names to their values.
+        settings:         Dictionary of active engine settings (``only_hex``,
+                          ``only_binary``, ``only_octal``, etc.).
+
+    Returns:
+        tuple: ``(full_problem, var_counter, token_spans)``
+
+            * *full_problem* -- list of tokens.
+            * *var_counter* -- number of distinct variable symbols found.
+            * *token_spans* -- parallel list of ``(start_col, end_col, raw_text)``
+              tuples for error-position mapping.
+
+    Raises:
+        E.SyntaxError: On malformed input (double decimal point, unknown
+            character, bare function name without parentheses, etc.).
     """
     global RAW_FUNCTION_MAP
     global plugin_operations
+
+    # --- Hot-register any pending plugin function into the tokenizer maps ---
+    # The plugin_manager stores newly registered callables in ``function_register``.
+    # On the first call that sees a new entry we inject it into RAW_FUNCTION_MAP
+    # and rebuild the optimized lookup tables so subsequent tokenization
+    # recognizes the function name.
     if function_register:
         function_name_key = list(function_register.keys())[0]
         function_name_pure = function_name_key.rstrip("(")
 
-        # 1. RAW_FUNCTION_MAP aktualisieren
         if function_name_key not in RAW_FUNCTION_MAP:
             RAW_FUNCTION_MAP[function_name_key] = function_name_pure
             plugin_operations.append(function_name_pure)
 
-
-            # 2. Globale Abhängigkeiten aktualisieren
+            # Rebuild PURE_FUNCTION_NAMES and FUNCTION_STARTS_OPTIMIZED
             update_function_globals()
             print("Globale Funktionsregister nach Plugin-Registrierung aktualisiert.")
+    # --- Tokenizer state initialisation ---
     var_counter = 0
-    var_list = [None] * len(problem)  # Track seen variable symbols → var0, var1, ...
-    full_problem = []
-    token_spans = []
-    b = 0
+    var_list = [None] * len(problem)  # Track seen variable symbols -> var0, var1, ...
+    full_problem = []       # Accumulated output tokens
+    token_spans = []        # Parallel position spans for error reporting
+    b = 0                   # Current scan position in the input string
 
-
-
+    # Build a string-valued copy of custom_variables for inline substitution.
     CONTEXT_VARS = {}
     for var_name, value in custom_variables.items():
         if isinstance(value, (int, float, Decimal)):
@@ -133,6 +226,7 @@ def translator(problem, custom_variables, settings):
         else:
             CONTEXT_VARS[var_name] = str(value)
 
+    # Sort variable names longest-first so that e.g. "ab" is matched before "a".
     sorted_vars = sorted(CONTEXT_VARS.keys(), key=len, reverse=True)
     HEX_DIGITS = "0123456789ABCDEFabcdef"
     temp_problem = problem
@@ -143,12 +237,16 @@ def translator(problem, custom_variables, settings):
 
     problem = temp_problem
 
+    # --- Main character-by-character scanning loop ---
+    # Each iteration classifies the character(s) at position ``b`` into exactly
+    # one token category (function, number, operator, paren, constant, or
+    # variable) and advances ``b`` past the consumed characters.
     temp_var = -1
     while b < len(problem):
         found_function = False
         current_char = problem[b]
 
-
+        # Phase 1: Try to match a known function / constant prefix at this position.
         for start_str, (token, length) in FUNCTION_STARTS_OPTIMIZED.items():
             if problem.startswith(start_str, b):
                 full_problem.append(token)
@@ -165,7 +263,10 @@ def translator(problem, custom_variables, settings):
                 raise E.SyntaxError(f"Function not support with only not decimals.", code="3033")
             continue
 
-        # --- Numbers: digits and decimal separator (EXPONENTIAL NOTATION SUPPORT ADDED) ---
+        # --- Phase 2: Number parsing (decimal, scientific notation, non-decimal bases) ---
+        # First attempts a non-decimal scan (0x, 0b, 0o prefixes).  If that
+        # fails, falls back to standard decimal/scientific-notation parsing
+        # which handles digits, decimal points, and 'E'/'e' exponents.
         if isInt(current_char) or (b >= 0 and current_char == "."):
             start_index = b
             parsed_value, new_index = non_decimal_scan(problem, b, settings)
@@ -229,7 +330,9 @@ def translator(problem, custom_variables, settings):
                     if has_exponent_e and not str_number[-1].isdigit():
                         raise E.SyntaxError("Missing exponent value after 'E'/'e'.", code="3032", position_start=b)
 
-        # --- Operators ---
+        # --- Phase 3: Operator recognition ---
+        # Handles single-char ops (+, -, *, /, =, ^, |, &) and two-char
+        # compound ops (**, <<, >>).  Invalid combos like <> or >< raise errors.
         elif isOp(current_char) != -1:
             start_index = b
             if current_char == "*" and b + 1 < len(problem) and problem[b + 1] == "*":
@@ -283,8 +386,11 @@ def translator(problem, custom_variables, settings):
 
         # --- Scientific functions and special forms: sin(, cos(, tan(, log(, √(, e^( ---
 
+        # --- Phase 4: Hex-mode bare digit collection ---
+        # When ``only_hex`` is active, characters A-F (case-insensitive) that
+        # were not already consumed as part of a numeric literal are gathered
+        # here and interpreted as hexadecimal digits.
         elif settings.get("only_hex", False) and current_char in HEX_DIGITS:
-            # Sammle alle aufeinanderfolgenden Hex-Zeichen (z.B. "FF", "1A3")
             str_number = current_char
             start_index = b
             while b + 1 < len(problem) and problem[b + 1] in HEX_DIGITS:
@@ -299,7 +405,7 @@ def translator(problem, custom_variables, settings):
             except E.ConversionError as e:
                 raise
 
-        # --- Constant π ---
+        # --- Phase 5: Pi constant (Unicode glyph) ---
         elif current_char == 'π':
             if settings["only_hex"] == True or settings["only_binary"] == True or settings["only_octal"]== True:
                 raise E.SyntaxError(f"Error with constant π:{result_string}", code="3033", position_start=b)
@@ -310,7 +416,12 @@ def translator(problem, custom_variables, settings):
             except ValueError:
                 raise E.CalculationError(f"Error with constant π:{result_string}", code="3219", position_start=b)
 
-                # --- Variables (fallback) ---
+                # --- Phase 6: Variable / identifier fallback ---
+                # Any remaining alphabetic character is treated as a variable.
+                # Multi-char identifiers that are not in ``custom_variables``
+                # and not a known function name are rejected.  Single-char
+                # unknowns are assigned sequential ``var<N>`` placeholders for
+                # the equation solver.
         else:
                 start_index = b
                 var_name = ""
@@ -365,9 +476,17 @@ def translator(problem, custom_variables, settings):
 
         b = b + 1
 
-    # --- Implicit multiplication pass ---
-    # Insert '*' between adjacent tokens that imply multiplication:
-    # number/variable/')' followed by '(' / number / variable / function name
+    # --- Phase 7: Implicit multiplication pass ---
+    # After the main scan, a second left-to-right sweep detects adjacent token
+    # pairs that mathematically imply multiplication and inserts an explicit
+    # '*' token between them.  The inserted token's span is tagged "*_impl"
+    # so downstream code can distinguish it from user-written multiplication
+    # if needed.
+    #
+    # Pairs that trigger insertion (current -> successor):
+    #   number/variable/')' followed by '(' / number / variable / function
+    #
+    # Examples:  "2x" -> "2 * x",  "3(4)" -> "3 * (4)",  ")(x" -> ") * (x"
     b = 0
     while b < len(full_problem):
 
@@ -377,6 +496,7 @@ def translator(problem, custom_variables, settings):
             successor = full_problem[b + 1]
             insertion_needed = False
 
+            # Classify the current and next tokens for the multiplication check.
             is_function_name = isScOp(successor) != -1
             is_number_or_variable = isinstance(current_element, (int, float, Decimal)) or (
                         "var" in str(current_element) and
@@ -386,6 +506,8 @@ def translator(problem, custom_variables, settings):
                         isinstance(successor, (int, float, Decimal)) or is_function_name)
             is_not_an_operator = current_element not in Operations and successor not in Operations
 
+            # Only insert '*' when both sides are value-like and neither is
+            # already an operator.
             if (is_number_or_variable or current_element == ')') and \
                     (is_paren_or_variable_or_number or successor == '(') and \
                     is_not_an_operator:
@@ -411,8 +533,59 @@ def translator(problem, custom_variables, settings):
 # -----------------------------
 
 def ast(received_string, settings, custom_variables):
-    """Parse a token stream into an AST.
-    Implements precedence via nested functions: factor → unary → power → term → sum → equation.
+    """Parse a raw expression into an Abstract Syntax Tree using recursive descent.
+
+    The function first tokenizes the input via :func:`translator`, then runs
+    a series of pre-parse validations and rewrites before invoking the
+    recursive-descent parser.
+
+    **Pre-parse validations / rewrites:**
+
+    * Multiple ``=`` signs that are not adjacent (``==``) are rejected.
+    * Adjacent ``==`` sets the ``expected_bool`` flag so the caller knows the
+      user intended a boolean equality check.
+    * A leading or trailing ``=`` without a variable is silently stripped.
+    * A leading ``*`` or ``/`` raises a "Missing Number" error.
+    * **Augmented assignment rewriting** -- when ``allow_augmented_assignment``
+      is ``True`` and the token stream contains ``<op>=`` (e.g., ``+=``), the
+      sequence is rewritten into ``= (<original_lhs> <op> <rhs>)`` so that
+      ``5 += 3`` becomes ``= (5 + 3)``.
+
+    **Operator-precedence chain** (lowest to highest):
+
+    ========== ===================== ==================================
+    Level      Function              Operators
+    ========== ===================== ==================================
+    1 (lowest) ``parse_gleichung``   ``=``  (equation / equality)
+    2          ``parse_bor``         ``|``  (bitwise OR)
+    3          ``parse_bxor``        ``^``  (bitwise XOR)
+    4          ``parse_band``        ``&``  (bitwise AND)
+    5          ``parse_shift``       ``<<``, ``>>``
+    6          ``parse_sum``         ``+``, ``-``
+    7          ``parse_term``        ``*``, ``/``
+    8          ``parse_power``       ``**`` (right-associative)
+    9          ``parse_unary``       unary ``+`` / ``-``
+    10 (highest) ``parse_factor``    numbers, variables, ``(...)``, functions
+    ========== ===================== ==================================
+
+    Args:
+        received_string:  The raw expression string (no output prefix).
+        settings:         Engine settings dictionary.
+        custom_variables: User-supplied variable bindings.
+
+    Returns:
+        tuple: ``(final_tree, cas, var_counter, expected_bool)``
+
+            * *final_tree* -- root AST node (``Number``, ``BinOp``, or
+              ``Variable``).
+            * *cas* -- ``True`` if the expression contains ``=`` (equation mode).
+            * *var_counter* -- number of distinct variable placeholders.
+            * *expected_bool* -- ``True`` if ``==`` was detected (equality check).
+
+    Raises:
+        E.SyntaxError:       On structural issues (empty input, missing numbers).
+        E.CalculationError:  On semantic issues (augmented assignment with
+                             variables, trailing operators, etc.).
     """
     analysed, var_counter, token_spans = translator(received_string, custom_variables, settings)
     d = 0
@@ -421,15 +594,20 @@ def ast(received_string, settings, custom_variables):
     expected_bool = False
     token_spans = list(token_spans)
 
+    # --- Pre-scan: detect multiple / adjacent '=' signs ---
+    # * Two non-adjacent '=' signs (e.g., "a = b = c") -> error.
+    # * Two adjacent '=' signs (i.e., "==") -> set ``expected_bool`` so the
+    #   caller treats the expression as an equality check returning bool.
     while d < len(analysed):
         if analysed[d] == "=":
             if temp_position != -2 and temp_position != d - 1:
-                # Wir holen uns die Position des zweiten Gleichzeichens für den Fehler
+                # Second '=' found at a non-adjacent position -- ambiguous equation
                 err_pos = token_spans[d][0]
                 raise E.CalculationError("Multiple Equal signs in one Problem.", code="3036", position_start=err_pos)
             elif temp_position == -2 and temp_position != d - 1:
                 temp_position = d
             elif temp_position != -2 and temp_position == d - 1:
+                # Adjacent '=' ('==') -- treat as boolean equality test
                 expected_bool = True
                 temp_position = d
         d += 1
@@ -450,7 +628,11 @@ def ast(received_string, settings, custom_variables):
     if analysed and (analysed[0] == "*" or analysed[0] == "/"):
         raise E.CalculationError("Missing Number.", code="3028", position_start=token_spans[0][0])
 
-    # Pre-parse validations / rewrites
+    # --- Pre-parse validations and augmented-assignment rewriting ---
+    # Walk the token list to detect and handle:
+    #   - Augmented assignment (e.g., "+=" rewritten to "= ( ... + ... )")
+    #   - Operators adjacent to '=' without AA enabled -> error
+    #   - Trailing operators with no right-hand operand -> error
     if analysed:
         b = 0
         while b < len(analysed) - 1:
@@ -460,13 +642,18 @@ def ast(received_string, settings, custom_variables):
                 raise E.CalculationError("Missing Number before '='.", code="3028",
                                          position_start=token_spans[b + 1][0])
 
-            # Case 1a: Rewrite "A += B" into "A = (A + B)"
+            # Case 1a: Augmented assignment rewriting (AA enabled, no variables)
+            # Transform "A += B" into "A = (A + B)":
+            #   1. Append a closing ')' at the end of the token list.
+            #   2. Insert an opening '(' right after the '=' position.
+            #   3. Remove the original '=' token (the operator before it
+            #      becomes the infix operator inside the parentheses).
             elif ((len(analysed) != b + 1 or len(analysed) != b + 2) and (
                     analysed[b + 1] == "=" and (analysed[b] in Operations)) and (
                           settings["allow_augmented_assignment"] == True) and not "var0" in analysed):
                 current_span = token_spans[b]
                 analysed.append(")")
-                token_spans.append((token_spans[-1][1], token_spans[-1][1], ")"))  # Dummy position am Ende
+                token_spans.append((token_spans[-1][1], token_spans[-1][1], ")"))
 
                 analysed.insert(b + 2, "(")
                 token_spans.insert(b + 2, (token_spans[b + 1][1], token_spans[b + 1][1], "("))
@@ -511,7 +698,17 @@ def ast(received_string, settings, custom_variables):
     # ---- Parsing functions in precedence order ----
 
     def parse_factor(tokens, token_spans):
-        """Numbers, variables, sub-expressions in '()', and scientific functions."""
+        """Parse an atomic expression (highest precedence level).
+
+        Handles:
+        * Numeric literals (``Decimal``, ``int``, ``float``) -> ``Number`` node.
+        * Variable placeholders (``var0``, ``var1``, ...) -> ``Variable`` node.
+        * Parenthesised sub-expressions -> recursively parsed via ``parse_bor``.
+        * Scientific functions (``sin``, ``cos``, ``tan``, ``log``, ``e^``,
+          ``sqrt``) -> evaluated eagerly and returned as ``Number`` nodes.
+        * Bit-manipulation functions (``setbit``, ``bitnot``, ...) -> evaluated
+          eagerly; two-argument variants consume a comma-separated second arg.
+        """
         list(token_spans)
         if len(tokens) > 0:
             token = tokens.pop(0)
@@ -679,6 +876,13 @@ def ast(received_string, settings, custom_variables):
             argument_subtree = parse_bor(tokens, token_spans)
 
             def get_second_arg_and_close():
+                """Consume a comma, parse the second argument, and consume the closing ')'.
+
+                Used by two-argument bit functions (e.g., ``setbit(val, bit)``).
+
+                Returns:
+                    tuple: ``(second_arg_subtree, closing_paren_span)``
+                """
                 if not tokens or tokens[0] != ',':
                     err_pos = token_spans[0][0] if token_spans else l_paren_pos[0]
                     raise E.SyntaxError(f"Missing comma after first argument in '{token}'", code="3009",
@@ -696,6 +900,7 @@ def ast(received_string, settings, custom_variables):
                 return base_sub, end_pos
 
             def close_only():
+                """Consume only the closing ')' -- used by single-argument bit functions."""
                 if not tokens or tokens[0] != ')':
                     raise E.SyntaxError(f"Missing closing parenthesis after function '{token}'", code="3009",
                                         position_start=l_paren_pos[0])
@@ -855,8 +1060,15 @@ def ast(received_string, settings, custom_variables):
         else:
             raise E.SyntaxError(f"Unexpected token: {token}", code="3012", position_start=pos[0])
 
+    # --- Precedence level 9: Unary operators ---
     def parse_unary(tokens, token_spans):
-        """Handle leading '+'/'-' (unary minus becomes 0 - operand)."""
+        """Handle leading unary ``+`` or ``-``.
+
+        A unary ``-`` is rewritten as ``BinOp(Number(0), '-', operand)`` so
+        the evaluator does not need special-case logic.  Unary ``+`` is a
+        no-op and simply returns the operand unchanged.  Recursively calls
+        itself to allow chained unary operators (e.g., ``--x``).
+        """
         if tokens and tokens[0] in ('+', '-'):
             operator = tokens.pop(0)
             pos = token_spans.pop(0)  # Sync
@@ -870,8 +1082,15 @@ def ast(received_string, settings, custom_variables):
                 return operand
         return parse_power(tokens, token_spans)
 
+    # --- Precedence level 8: Exponentiation ---
     def parse_power(tokens, token_spans):
-        """Exponentiation '^' (handled before * and +)."""
+        """Parse exponentiation (``**``), which is right-associative.
+
+        If neither operand is a ``Variable``, the power is evaluated eagerly
+        and collapsed into a single ``Number`` node to reduce AST depth.
+        When a variable is involved, a ``BinOp`` node is produced so the
+        equation solver can inspect the structure.
+        """
         current_subtree = parse_factor(tokens, token_spans)
         while tokens and (tokens[0] == "**"):
             operator = tokens.pop(0)
@@ -887,8 +1106,12 @@ def ast(received_string, settings, custom_variables):
                 return current_subtree
         return current_subtree
 
+    # --- Precedence level 7: Multiplication and division ---
     def parse_term(tokens, token_spans):
-        """Multiplication and division."""
+        """Parse multiplication (``*``) and division (``/``).
+
+        Left-associative: ``a * b / c`` is parsed as ``(a * b) / c``.
+        """
         current_subtree = parse_unary(tokens, token_spans)
         while tokens and tokens[0] in ("*", "/"):
             operator = tokens.pop(0)
@@ -897,7 +1120,13 @@ def ast(received_string, settings, custom_variables):
             current_subtree = BinOp(current_subtree, operator, right_part, position_start=pos[0], position_end=pos[1])
         return current_subtree
 
+    # --- Precedence level 5: Bit shifts ---
     def parse_shift(tokens, token_spans):
+        """Parse bit-shift operators ``<<`` (left shift) and ``>>`` (right shift).
+
+        Left-associative.  Sits between addition/subtraction and bitwise AND
+        in the precedence hierarchy.
+        """
         current_subtree = parse_sum(tokens, token_spans)
         while tokens and tokens[0] in ("<<", ">>"):
             operator = tokens.pop(0)
@@ -906,8 +1135,13 @@ def ast(received_string, settings, custom_variables):
             current_subtree = BinOp(current_subtree, operator, right_part, position_start=pos[0], position_end=pos[1])
         return current_subtree
 
+    # --- Precedence level 6: Addition and subtraction ---
     def parse_sum(tokens, token_spans):
-        """Addition and subtraction."""
+        """Parse addition (``+``) and subtraction (``-``).
+
+        Left-associative.  Delegates higher-precedence operations to
+        ``parse_term``.
+        """
         current_subtree = parse_term(tokens, token_spans)
         while tokens and tokens[0] in ("+", "-"):
             operator = tokens.pop(0)
@@ -916,7 +1150,12 @@ def ast(received_string, settings, custom_variables):
             current_subtree = BinOp(current_subtree, operator, right_part, position_start=pos[0], position_end=pos[1])
         return current_subtree
 
+    # --- Precedence level 2: Bitwise OR ---
     def parse_bor(tokens, token_spans):
+        """Parse bitwise OR (``|``).
+
+        Lowest-precedence binary bitwise operator.  Left-associative.
+        """
         current_subtree = parse_bxor(tokens, token_spans)
         while tokens and tokens[0] == "|":
             operator = tokens.pop(0)
@@ -925,7 +1164,9 @@ def ast(received_string, settings, custom_variables):
             current_subtree = BinOp(current_subtree, operator, right_part, position_start=pos[0], position_end=pos[1])
         return current_subtree
 
+    # --- Precedence level 3: Bitwise XOR ---
     def parse_bxor(tokens, token_spans):
+        """Parse bitwise XOR (``^``).  Left-associative."""
         current_subtree = parse_band(tokens, token_spans)
         while tokens and tokens[0] == "^":
             operator = tokens.pop(0)
@@ -934,7 +1175,9 @@ def ast(received_string, settings, custom_variables):
             current_subtree = BinOp(current_subtree, operator, right_part, position_start=pos[0], position_end=pos[1])
         return current_subtree
 
+    # --- Precedence level 4: Bitwise AND ---
     def parse_band(tokens, token_spans):
+        """Parse bitwise AND (``&``).  Left-associative."""
         current_subtree = parse_shift(tokens, token_spans)
         while tokens and tokens[0] == "&":
             operator = tokens.pop(0)
@@ -943,8 +1186,14 @@ def ast(received_string, settings, custom_variables):
             current_subtree = BinOp(current_subtree, operator, right_part, position_start=pos[0], position_end=pos[1])
         return current_subtree
 
+    # --- Precedence level 1 (lowest): Equation / equality ---
     def parse_gleichung(tokens, token_spans):
-        """Optional '=' at the top level: build BinOp('=') when present."""
+        """Parse a top-level equation (``=``) if present.
+
+        If no ``=`` is found the expression is returned as-is.  When ``=``
+        is present, a ``BinOp('=', left, right)`` node is constructed so
+        that :func:`solve` or the equality checker can inspect both sides.
+        """
         left_side = parse_bor(tokens, token_spans)
         if tokens and tokens[0] == "=":
             operator = tokens.pop(0)
@@ -953,9 +1202,13 @@ def ast(received_string, settings, custom_variables):
             return BinOp(left_side, operator, right_part)
         return left_side
 
-    # Build the final AST
+    # --- Build the final AST from the full token stream ---
     final_tree = parse_gleichung(analysed, token_spans)
-    # Decide if this is a CAS-style equation with <= 1 variable
+
+    # Determine whether the expression is an equation (CAS mode).
+    # ``cas`` is True whenever the root node is ``BinOp('=')``, regardless of
+    # how many variables are present.  The caller uses ``cas`` together with
+    # ``var_counter`` to choose between solving, equality checking, or erroring.
     if isinstance(final_tree, BinOp) and final_tree.operator == '=' and var_counter <= 1:
         cas = True
     if isinstance(final_tree, BinOp) and final_tree.operator == '=' and var_counter > 1:
@@ -975,7 +1228,25 @@ def ast(received_string, settings, custom_variables):
 # -----------------------------
 
 def solve(tree, var_name):
-    """Solve (A*x + B) = (C*x + D) for x, or detect no/inf. solutions."""
+    """Solve a linear equation ``(A*x + B) = (C*x + D)`` for *x*.
+
+    Uses ``collect_term()`` on both sides of the ``=`` node to decompose
+    the expression into ``(factor, constant)`` pairs, then computes:
+
+        x = (D - B) / (A - C)
+
+    Args:
+        tree:     The root ``BinOp`` node with ``operator='='``.
+        var_name: The internal variable name (e.g., ``"var0"``).
+
+    Returns:
+        Decimal: The solution value.
+        str:     ``"Inf. Solutions"`` if A==C and B==D.
+        str:     ``"No Solution"`` if A==C and B!=D.
+
+    Raises:
+        E.SolverError: If the tree is not a valid equation (code ``3012``).
+    """
     if not isinstance(tree, BinOp) or tree.operator != '=':
         raise E.SolverError("No valid equation to solve.", code="3012")
     (A, B) = tree.left.collect_term(var_name)
@@ -995,11 +1266,22 @@ def solve(tree, var_name):
 # -----------------------------
 
 def cleanup(result):
-    """Format a numeric result as Fraction or Decimal depending on settings.
+    """Format a raw numeric result according to the active settings.
+
+    Processing order:
+        1. If ``fractions=True`` and result is ``Decimal``: converts to a
+           ``Fraction``, rendered as a mixed number (e.g., ``"1 1/2"``)
+           or simple fraction (e.g., ``"1/3"``).
+        2. If result is ``Decimal`` integer: returned as-is.
+        3. If result is ``Decimal`` non-integer: rounded to ``decimal_places``.
+        4. Legacy ``int``/``float`` handling for non-Decimal results.
+
+    Args:
+        result: The raw evaluation result (typically ``Decimal``).
 
     Returns:
-        (rendered_value, rounding_flag)
-    where rounding_flag indicates whether Decimal rounding occurred.
+        tuple: ``(formatted_value, rounding_flag)`` where *rounding_flag*
+               is ``True`` if decimal rounding was applied.
     """
     rounding = locals().get('rounding', False)
 
@@ -1096,10 +1378,33 @@ def cleanup(result):
 # -----------------------------
 
 def calculate(problem: str, custom_variables: Union[dict, None] = None, validate : int = 0):
+    """Main calculation entry point: parse, evaluate, format, and return.
+
+    This is the function called by :func:`math_engine.evaluate`.  It
+    orchestrates the entire pipeline:
+
+    1. Dynamic Decimal precision scaling based on input sizes
+    2. Output prefix extraction and normalization (e.g., ``hex:`` → ``hexadecimal:``)
+    3. AST construction via :func:`ast`
+    4. Evaluation path selection (numeric / solve / equality check)
+    5. Result formatting via :func:`cleanup` and :func:`apply_word_limit`
+    6. Output type conversion based on the prefix
+    7. Exception normalization (all exceptions wrapped as ``MathError``)
+
+    Args:
+        problem:          The expression string (prefix already included).
+        custom_variables: Variable context dictionary, or ``None``.
+        validate:         ``0`` = parse only (return AST), ``1`` = full evaluate.
+
+    Returns:
+        The typed result (``Decimal``, ``int``, ``float``, ``bool``, ``str``),
+        or the AST tree when ``validate=0``.
+
+    Raises:
+        E.MathError: (or subclass) on any parsing, evaluation, or conversion failure.
+    """
     if custom_variables is None:
         custom_variables = {}
-
-    """Main API: parse → (evaluate | solve | equality-check) → format → render string."""
     # Guard precision locally before each calculation (UI may adjust as well)
     getcontext().prec = 10000
     settings = config_manager.load_setting_value("all")  # pass UI settings down to parser
@@ -1107,6 +1412,19 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
     debug = settings.get("debug", False)
     target_places = settings.get("decimal_places", 2)
 
+    # -------------------------------------------------------------------
+    # Dynamic Decimal precision scaling
+    # -------------------------------------------------------------------
+    # The global Decimal context precision is tuned per-calculation so that
+    # it is always large enough to represent the input numbers and the
+    # desired output decimal places without silent truncation, yet not
+    # wastefully large (capped at 10 000 to avoid excessive memory use).
+    #
+    # The formula: needed = max(MIN_PRECISION,
+    #                           max_input_digits + BUFFER,
+    #                           max_variable_digits + BUFFER,
+    #                           target_decimal_places + BUFFER)
+    # -------------------------------------------------------------------
     input_numbers = re.findall(r'\d+(?:\.\d+)?', problem)
 
     max_input_length = len(max(input_numbers, key=len)) if input_numbers else 0
@@ -1119,6 +1437,7 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
             equation=problem
         )
 
+    # Also account for the digit length of variable values supplied by the caller.
     max_var_length = 0
     for val in custom_variables.values():
         s_val = str(val)
@@ -1141,6 +1460,16 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
 
     if debug == True:
         print(f"[DEBUG] Precision set to: {needed_precision} (Input: {max_input_length}, Target: {target_places})")
+    # -------------------------------------------------------------------
+    # Output prefix extraction and normalization
+    # -------------------------------------------------------------------
+    # The user can prepend a type-prefix to the expression to control the
+    # Python type of the return value (e.g., "hex:255" -> "0xFF").
+    # Short aliases ("h:", "d:", "f:", ...) are normalised to their full
+    # canonical form ("hexadecimal:", "decimal:", "float:", ...).
+    # After detection the prefix is stripped from ``problem`` so the
+    # tokenizer receives a clean mathematical expression.
+    # -------------------------------------------------------------------
     var_list = []
     allowed_prefix = (
         "dec:", "d:", "Decimal:",
@@ -1155,6 +1484,7 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
     output_prefix = ""
     problem_lower = problem.lower()
     try:
+        # Try each known prefix (case-insensitive) and normalise to canonical form.
         for prefix in allowed_prefix:
             if problem_lower.startswith(prefix):
                 if prefix.startswith("s")or prefix.startswith("S"):
@@ -1174,12 +1504,19 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
                 elif prefix.startswith("o") or prefix.startswith("O"):
                     output_prefix = "octal:"
 
+                # Strip the prefix (including the ':') from the expression.
                 start = problem.index(":")
                 problem = problem[start+1:]
                 break
 
 
-        final_tree, cas, var_counter, expected_bool = ast(problem, settings, custom_variables)  # NEW: settings param enables AA handling
+        # --- AST construction ---
+        final_tree, cas, var_counter, expected_bool = ast(problem, settings, custom_variables)
+
+        # --- Reconcile expected_bool with user-specified prefix ---
+        # When '==' was detected (expected_bool=True) but the user supplied a
+        # non-boolean prefix, behaviour depends on the ``correct_output_format``
+        # setting: if False -> error; if True -> silently override to boolean.
         if output_prefix != "boolean:" and expected_bool == True and output_prefix != "" and settings["correct_output_format"]== False:
             raise E.SyntaxError("Couldnt convert result into the given prefix", code="3037")
 
@@ -1189,6 +1526,8 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
         elif output_prefix != "boolean:" and expected_bool == True and settings["correct_output_format"]== True:
             output_prefix = "boolean:"
 
+        # When ``only_*`` mode is active and no explicit prefix was provided,
+        # default the output to the corresponding base representation.
         if output_prefix == "" and settings["only_hex"] == True:
             output_prefix = "hexadecimal:"
         elif output_prefix == "" and settings["only_binary"] == True:
@@ -1199,9 +1538,20 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
         if validate == 0:
             result = final_tree
 
-        # Decide evaluation mode
+        # -------------------------------------------------------------------
+        # Evaluation path decision tree
+        # -------------------------------------------------------------------
+        # The combination of ``cas`` (equation detected) and ``var_counter``
+        # (number of distinct variables) determines which evaluation strategy
+        # is used:
+        #
+        #   cas=True,  var_counter>0  -> SOLVE:  linear equation solver
+        #   cas=False, var_counter==0 -> EVALUATE: pure numeric evaluation
+        #   cas=True,  var_counter==0 -> EQUALITY CHECK: compare both sides
+        #   (other)                   -> ERROR: invalid combination
+        # -------------------------------------------------------------------
         if cas and var_counter > 0:
-            # Solve linear equation for first variable symbol in the token stream
+            # --- Path 1: Solve linear equation for the first variable ---
             var_name_in_ast = "var0"
             if settings["only_hex"] == True or settings["only_binary"] == True or settings["only_octal"] == True:
                 raise E.SolverError("Variables not supported with only_hex, only_binary or only_octal mode.",
@@ -1210,14 +1560,15 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
                 result = solve(final_tree, var_name_in_ast)
 
         elif not cas and var_counter == 0:
-            # Pure numeric evaluation
+            # --- Path 2: Pure numeric evaluation (no equation, no variables) ---
             if validate == 1:
                 result = final_tree.evaluate()
 
         elif cas and var_counter == 0:
+            # --- Path 3: Pure equality check (equation but no variables) ---
+            # Evaluates both sides independently and compares them.
             if output_prefix == "":
                 output_prefix = "boolean:"
-            # Pure equality check (no variable): returns "= True/False"
             left_val = final_tree.left.evaluate()
             right_val = final_tree.right.evaluate()
             output_string = "True" if left_val == right_val else "False"
@@ -1233,7 +1584,7 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
                     raise E.ConversionError("Couldnt convert type to" + str(output_prefix), code="8003")
 
         else:
-            # Mixed/invalid states with or without '=' and variables
+            # --- Path 4: Invalid / unsupported combinations ---
             if cas:
                 raise E.SolverError("The solver was used on a non-equation", code="3005")
             elif not cas and not "=" in problem:
@@ -1246,19 +1597,23 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
             elif cas and var_counter>1:
                 raise E.SolverError("Multiple Variables found.", error = "")
             else:
-                print(cas)
-                print(var_counter)
                 raise E.CalculationError("The calculator was called on an equation.", code="3015")
 
-        # Render result based on settings (fractions/decimals, rounding flag)
+        # --- Result formatting ---
+        # Pass the raw numeric result through cleanup() for fraction rendering
+        # and decimal rounding, then enforce any configured word/bit limit.
         if validate == 1:
             result, rounding = cleanup(result)
             result = apply_word_limit(result, settings)
-        approx_sign = "\u2248"  # "≈"
+        approx_sign = "\u2248"  # "approx" sign used when rounding was applied
         if validate == 1:
-            # --- START OF MODIFIED BLOCK FOR EXPONENTIAL NOTATION CONTROL ---
-
-            # Convert normalized result to string (Decimal supports to_normal_string)
+            # ---------------------------------------------------------------
+            # Output type conversion based on the extracted prefix
+            # ---------------------------------------------------------------
+            # Converts the (possibly rounded) result into the Python type
+            # requested by the user's prefix.  Each branch attempts the
+            # conversion and wraps failures in ``ConversionOutputError``.
+            # ---------------------------------------------------------------
             if isinstance(result, str) and '/' in result:
                 output_string = result
 
@@ -1271,6 +1626,8 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
 
             else:
                 output_string = result
+            # Fall back to the engine's configured default output format when
+            # no explicit prefix was specified by the user.
             if output_prefix == "":
                 output_prefix = settings["default_output_format"]
             if output_prefix == "decimal:":
@@ -1341,7 +1698,21 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
             return result
 
 
-    # Known numeric overflow
+    # -------------------------------------------------------------------
+    # Exception wrapping
+    # -------------------------------------------------------------------
+    # All exceptions raised during the pipeline above are caught here and
+    # normalised into the project's ``E.MathError`` hierarchy so that
+    # callers only need to handle one base exception type.
+    #
+    # Layer 1: Decimal arithmetic overflow / invalid operations -> CalculationError
+    # Layer 2: Output-format conversion failures -> ConversionError
+    # Layer 3: Domain-specific MathError subclasses -> re-raised with the
+    #          source equation attached for diagnostics.
+    # Layer 4: Any other Python built-in exception -> wrapped in MathError
+    #          with code "9999" (unknown error) or the embedded 4-digit code
+    #          if the message string already starts with one.
+    # -------------------------------------------------------------------
     except (Overflow, DivisionImpossible, InvalidOperation) as e:
         raise E.CalculationError(
             message="Number too large or invalid operation (Arithmetic overflow).",
@@ -1353,18 +1724,18 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
                 f"Couldnt convert result '{output_string}' into '{output_prefix}'",
                 code="8006"
             )
-    # Re-raise our domain errors after attaching the source equation
     except E.MathError as e:
+        # Attach the original expression for downstream error reporting.
         e.equation = problem
         raise e
-    # Convert unexpected Python exceptions to our unified error type
     except (ValueError, SyntaxError, ZeroDivisionError, TypeError, Exception) as e:
+        # Catch-all: wrap any unexpected Python exception as MathError.
         error_message = str(e).strip()
         parts = error_message.split(maxsplit=1)
         code = "9999"
         message = error_message
 
-        # If an error string already begins with a 4-digit code, respect it
+        # If the error string already begins with a 4-digit code, extract it.
         if parts and parts[0].isdigit() and len(parts[0]) == 4:
             code = parts[0]
             if len(parts) > 1:
@@ -1373,7 +1744,11 @@ def calculate(problem: str, custom_variables: Union[dict, None] = None, validate
 
 
 def test_main():
-    """Simple REPL-like runner for manual testing of the engine."""
+    """Simple recursive REPL for manual testing of the calculation engine.
+
+    Reads an expression from stdin, evaluates it, prints the result,
+    and loops.  Only intended for standalone development testing.
+    """
     print("Enter the problem: ")
     problem = input()
     result = calculate(problem)

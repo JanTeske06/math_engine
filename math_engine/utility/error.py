@@ -1,22 +1,40 @@
-# error.py
-"""""
-Custom error types and error message catalog for the Advanced Python Calculator.
+"""
+Custom exception hierarchy and error code catalog for math_engine.
 
-- MathError is the common base class that carries:
-  - message: human-readable description
-  - code: 4-digit string (see ERROR_MESSAGES)
-  - equation: the input expression/equation that triggered the error
+Exception Hierarchy
+-------------------
+::
 
-- Specialized subclasses let the rest of the code catch specific categories
-  (SyntaxError, CalculationError, SolverError) while keeping a unified shape.
+    Exception
+      +-- MathError                  # Base — carries message, code, equation, positions
+           +-- SyntaxError           # Parsing / tokenization / structural issues
+           +-- CalculationError      # Runtime numeric issues (e.g., division by zero)
+           +-- SolverError           # Algebraic solver issues (nonlinear, multiple vars)
+           +-- ConversionError       # Type conversion failures during evaluation
+           +-- ConversionOutputError # Output format conversion failures
+           +-- ConfigError           # Configuration read/write failures
+           +-- PluginError           # Plugin loading and validation failures
 
-- ERROR_MESSAGES maps error codes to short, user-facing messages.
-  The UI composes the final dialog text using these templates.
-"""""
+Error Code Structure
+--------------------
+Each code is a 4-digit string.  The first digit identifies the error family:
 
-# Note: This module defines its own SyntaxError class on purpose.
-# It shadows Python's built-in SyntaxError *within this module/import path*,
-# but keeps a consistent error API with (message, code, equation).
+    1xxx  Missing Files
+    2xxx  Scientific Calculation
+    3xxx  Calculator / Parser / Solver
+    4xxx  Memory
+    5xxx  Configuration
+    6xxx  Communication
+    7xxx  Runtime
+    8xxx  Conversion
+    9xxx  Plugin / Catch-All
+
+Note
+----
+This module defines its own ``SyntaxError`` class, intentionally shadowing
+Python's built-in.  Always import via ``from math_engine.utility import error
+as E`` and reference ``E.SyntaxError`` to avoid ambiguity.
+"""
 
 class MathError(Exception):
     """Base error for all calculator failures.
@@ -27,6 +45,18 @@ class MathError(Exception):
         equation (str|None): original user input that caused the error
     """
     def __init__(self, message, code="9999", equation=None, position_start: int = -1,position_end: int = -1):
+        """Initialise a MathError.
+
+        Args:
+            message:        Human-readable explanation of the failure.
+            code:           4-digit error code string (default ``"9999"``).
+            equation:       The original user input that triggered the error,
+                            or ``None`` if unavailable.
+            position_start: 0-based character index where the error begins
+                            inside *equation* (``-1`` = unknown).
+            position_end:   0-based character index where the error ends.
+                            Defaults to *position_start* when not provided.
+        """
         super().__init__(message)
         self.message = message
         self.code = code
@@ -37,36 +67,95 @@ class MathError(Exception):
         self.position_end = position_end
 
 class SyntaxError(MathError):
-    """Parsing/tokenization/parentheses or general syntax issues."""
+    """Raised for parsing, tokenization, parenthesis-matching, or structural issues.
+
+    This covers malformed expressions, missing brackets, unexpected tokens,
+    and any other problem detected before or during tokenization.
+
+    Typical codes: 3008--3042.
+
+    Note:
+        This class intentionally shadows the built-in ``SyntaxError``.
+        Always reference it via the module alias (``E.SyntaxError``) to
+        avoid confusion.
+    """
     pass
 
 
 class CalculationError(MathError):
-    """Numeric/runtime calculation issues (g., division by zero)."""
+    """Raised for numeric or runtime calculation issues.
+
+    Examples include division by zero, numeric overflow, numbers too large
+    to represent, and missing operands.
+
+    Typical codes: 3003, 3026--3029.
+    """
     pass
 
 
 class SolverError(MathError):
-    """Algebraic solver issues (g., non-linear, multiple variables)."""
+    """Raised when the algebraic equation solver cannot proceed.
+
+    Common causes are non-linear terms (variable in a denominator or
+    exponent), multiple unknown variables, or infinite/no solutions.
+
+    Typical codes: 3002, 3005--3007, 3013--3014.
+    """
     pass
+
 
 class ConversionError(MathError):
+    """Raised when type conversion fails during input parsing or evaluation.
+
+    Covers failures such as invalid hex digits, inability to convert a
+    string to ``int``/``Decimal``, and incompatible operand types for
+    bit operations.
+
+    Typical codes: 8000--8008.
+    """
     pass
+
 
 class ConversionOutputError(MathError):
+    """Raised when the computed result cannot be formatted into the requested output base.
+
+    For example, a non-integer result cannot be represented as a binary or
+    hexadecimal literal.
+
+    Typical codes: 8003, 8006.
+    """
     pass
+
 
 class ConfigError(MathError):
+    """Raised for configuration read, write, or validation failures.
+
+    This includes missing config files, invalid setting values, and
+    I/O errors when persisting configuration.
+
+    Typical codes: 5000--5004.
+    """
     pass
 
+
 class PluginError(MathError):
+    """Raised for plugin discovery, loading, or validation failures.
+
+    Covers issues such as malformed ``register_function`` dicts, missing
+    plugin classes, classes that do not inherit ``BasePlugin``, and runtime
+    errors during plugin instantiation.
+
+    Typical codes: 9000--9011.
+    """
     pass
 
 
 # ---------------------------------------------------------------------------
-# Error families (first digit) for quick categorization in logs/telemetry.
-# This dictionary is informational; actual user strings come from
-# ERROR_MESSAGES below.
+# Error-family lookup
+# ---------------------------------------------------------------------------
+# Maps the first digit of a 4-digit error code to a human-readable family
+# name.  Used for quick categorization in logs and telemetry dashboards.
+# The actual end-user messages live in ERROR_MESSAGES below.
 # ---------------------------------------------------------------------------
 Error_Dictionary = {
     "1": "Missing Files",
@@ -80,15 +169,25 @@ Error_Dictionary = {
     "9" : "Plugin Error"
 }
 
-# Error code structure:
-#   1st digit  -> main error family (see Error_Dictionary)
-#   2nd digit  -> sub-area / component
-#   3rd & 4th  -> specific error number
+# ---------------------------------------------------------------------------
+# Error message catalog
+# ---------------------------------------------------------------------------
+# Every entry maps a 4-digit string code to a short, user-facing message.
 #
-# Notes:
-# - Some messages expect concatenation with extra context by the caller
-#   (g., operator/problem string). Keep the base text short and neutral.
-# - Do not change codes lightly; they are used across UI/dialogs and logs.
+# Code structure:
+#   1st digit  -> main error family (see Error_Dictionary above)
+#   2nd digit  -> sub-area or component within the family
+#   3rd & 4th  -> specific error sequence number
+#
+# For example, code "3008":
+#   3 = Calculator family, 0 = core parser, 08 = "more than one '.' in a number"
+#
+# Conventions:
+# - Messages ending with ": " expect the caller to append extra context
+#   (e.g., the offending operator or sub-expression).
+# - Do not renumber existing codes: they are referenced by the UI and by
+#   external log parsers.
+# ---------------------------------------------------------------------------
 ERROR_MESSAGES = {
     # 2xxx — scientific/processing/config related
     "2000": "Sin/Cos/tan was recognized, but couldnt be assigned in processing.",
