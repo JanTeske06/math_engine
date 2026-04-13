@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "math-engine"
-version = "0.6.5"
+version = "0.6.6"
 authors = [
   { name="Jan Teske", email="jan.teske.06@gmail.com" },
 ]
@@ -54,5 +54,8 @@ omit = [
 
     # WIP
     "math_engine/plugins/*",
-    "math_engine/plugin_manager.py"
+    "math_engine/utility/plugin_manager.py",
+
+    # Unused duplicate of the tokenizer in calculator.py
+    "math_engine/calculator/translator.py"
 ]

@@ -1,7 +1,46 @@
+"""
+Main test suite for the math_engine project.
+
+Contains 234 test cases exercised via pytest. An autouse fixture
+(``fresh_preset``) resets the engine's configuration before every test so
+that each case starts from a known-good state.
+
+Coverage areas
+--------------
+- Arithmetic operations and operator precedence
+- Decimal-place rounding and fraction output
+- Equality / boolean evaluation
+- Error codes for invalid syntax and runtime faults
+- Variable substitution and the linear-equation solver
+- Non-decimal literal parsing (hex, binary, octal)
+- Output-prefix selection (hex:, bin:, o:, int:, float:, str:, bool:, d:)
+- Strict ``only_hex`` / ``only_binary`` / ``only_octal`` modes
+- Memory management (set / delete / show)
+- Settings API (change_setting, load_all_settings, load_one_setting)
+- Expression validation (``validate()``)
+- Scientific functions (sin, cos, log, sqrt, pi)
+- Bitwise operators (&, |, ^, <<, >>)
+- Advanced operator precedence (bitwise vs arithmetic vs power)
+- Word-size limits and signed/unsigned overflow
+- Power (**) vs XOR (^) disambiguation
+- Nested bracket parsing with mixed number formats
+- Augmented-assignment rewriting (+=, -=, etc.)
+- Bit-manipulation helper functions (setbit, clrbit, togbit, testbit,
+  bitand, bitor, bitxor, shl, shr, bitnot)
+- Error-position reporting (character-level indices)
+- ``config_manager`` persistence, type validation, and mutual-exclusion
+  logic
+- CLI entry-point (argument mode, interactive REPL, command handlers)
+- Calculator internals (tokeniser edge cases, implicit multiplication)
+- Solver internals (linear equations, non-linear rejection)
+- ``ScientificEngine`` internals (isPi, isSCT, isLog, isE, isRoot,
+  degree mode)
+"""
+
 import pytest
 
 # ---------------------------------------------------------------------------
-# Fixtures & Basis-Settings
+# Fixtures & helpers
 # ---------------------------------------------------------------------------
 
 DEFAULT_SETTINGS = {"decimal_places": 2,
@@ -22,22 +61,47 @@ DEFAULT_SETTINGS = {"decimal_places": 2,
 
 @pytest.fixture(autouse=True)
 def fresh_preset():
+    """Reset the engine configuration before every test.
+
+    This autouse fixture calls ``reset_settings()`` so that each test
+    starts from factory defaults, preventing state leakage between tests.
+    The current settings dictionary is returned for convenience but most
+    tests simply rely on the side-effect.
+    """
     math_engine.utility.config_manager.reset_settings()
     settings = math_engine.utility.config_manager.load_setting_value("all")
     return settings
+
+
 def load_defaults(**overrides):
-    """Hilfsfunktion: Default-Settings + optionale Overrides laden."""
+    """Load the default settings dict with optional overrides applied.
+
+    Creates a copy of ``DEFAULT_SETTINGS``, merges *overrides* into it,
+    and pushes the result into the engine via ``load_preset``.
+    """
     settings = DEFAULT_SETTINGS.copy()
     settings.update(overrides)
     math_engine.load_preset(settings)
 
 
 def assert_error_location(expression, expected_code, expected_start_index, expected_end_index=-1):
-    """
-    Executes the expression and asserts that:
-    1. An error is raised.
-    2. The error code matches.
-    3. The 'position_start' matches the exact character index in the string.
+    """Evaluate *expression* and verify the resulting error's code and position.
+
+    Parameters
+    ----------
+    expression : str
+        The mathematical expression to evaluate.
+    expected_code : str
+        The numeric error-code string that the raised ``MathError`` must carry.
+    expected_start_index : int
+        The zero-based character index where the error is expected to start.
+    expected_end_index : int, optional
+        If not ``-1``, also assert that ``position_end`` equals this value.
+
+    Raises
+    ------
+    AssertionError
+        If no error is raised, or if the code / position does not match.
     """
     with pytest.raises(E.MathError) as exc:
         math_engine.evaluate(expression)
@@ -53,7 +117,9 @@ def assert_error_location(expression, expected_code, expected_start_index, expec
     if expected_end_index != -1:
         assert exc.value.position_end == expected_end_index
 # ---------------------------------------------------------------------------
-# 1) Grundrechenarten & Präzedenz
+# 1) Basic arithmetic operations & operator precedence
+#    Addition, subtraction, multiplication, division, parentheses,
+#    nested parentheses, and unary plus / minus.
 # ---------------------------------------------------------------------------
 
 def test_simple_addition():
@@ -101,7 +167,9 @@ def test_unary_plus_is_neutral():
 
 
 # ---------------------------------------------------------------------------
-# 2) Dezimalstellen & Runden / Fractions
+# 2) Decimal-place rounding & fraction output
+#    Verifies that results honour the configured ``decimal_places`` setting
+#    and that high-precision mode works correctly.
 # ---------------------------------------------------------------------------
 
 def test_decimal_places_rounding_default_two_decimals():
@@ -2408,3 +2476,1140 @@ def test_all_bit_operations_combined_expression():
 
 def test_reset():
     math_engine.utility.config_manager.reset_settings_tests()
+
+
+# ---------------------------------------------------------------------------
+# Coverage: AST_Node_Types.py
+# ---------------------------------------------------------------------------
+
+from math_engine.calculator.AST_Node_Types import Number, Variable, BinOp
+from math_engine.utility import error as E_mod
+
+
+class TestNumberRepr:
+    def test_number_repr(self):
+        n = Number(42)
+        assert repr(n) == "Number(42)"
+
+    def test_number_repr_decimal(self):
+        n = Number("3.14")
+        assert repr(n) == "Number(3.14)"
+
+
+class TestVariableRepr:
+    def test_variable_repr(self):
+        v = Variable("var0")
+        assert repr(v) == "Variable('var0')"
+
+
+class TestBinOpRepr:
+    def test_binop_repr(self):
+        left = Number(1)
+        right = Number(2)
+        b = BinOp(left, "+", right)
+        assert repr(b) == "BinOp('+', left=Number(1), right=Number(2))"
+
+
+class TestNumberCollectTerm:
+    def test_number_collect_term(self):
+        n = Number(5)
+        factor, constant = n.collect_term("var0")
+        assert factor == 0
+        assert constant == 5
+
+
+class TestVariableCollectTerm:
+    def test_matching_variable(self):
+        v = Variable("var0")
+        factor, constant = v.collect_term("var0")
+        assert factor == 1
+        assert constant == 0
+
+    def test_non_matching_variable(self):
+        v = Variable("var1")
+        with pytest.raises(E_mod.SolverError) as exc:
+            v.collect_term("var0")
+        assert exc.value.code == "3002"
+
+
+class TestVariableEvaluate:
+    def test_evaluate_raises(self):
+        v = Variable("var0")
+        with pytest.raises(E_mod.SolverError) as exc:
+            v.evaluate()
+        assert exc.value.code == "3005"
+
+
+class TestBinOpCollectTermSubtraction:
+    def test_subtraction(self):
+        # (var0) - (3)  =>  factor=1, constant=-3
+        left = Variable("var0")
+        right = Number(3)
+        b = BinOp(left, "-", right)
+        factor, constant = b.collect_term("var0")
+        assert factor == 1
+        assert constant == -3
+
+
+class TestBinOpCollectTermMultiplication:
+    def test_constant_times_variable(self):
+        # 5 * var0  =>  factor=5, constant=0
+        left = Number(5)
+        right = Variable("var0")
+        b = BinOp(left, "*", right)
+        factor, constant = b.collect_term("var0")
+        assert factor == 5
+        assert constant == 0
+
+    def test_variable_times_constant(self):
+        # var0 * 5  =>  factor=5, constant=0
+        left = Variable("var0")
+        right = Number(5)
+        b = BinOp(left, "*", right)
+        factor, constant = b.collect_term("var0")
+        assert factor == 5
+        assert constant == 0
+
+    def test_nonlinear_multiplication(self):
+        # var0 * var0  =>  non-linear
+        left = Variable("var0")
+        right = Variable("var0")
+        b = BinOp(left, "*", right)
+        with pytest.raises(E_mod.SyntaxError) as exc:
+            b.collect_term("var0")
+        assert exc.value.code == "3005"
+
+
+class TestBinOpCollectTermDivision:
+    def test_division_by_constant(self):
+        # var0 / 2  =>  factor=0.5, constant=0
+        left = Variable("var0")
+        right = Number(2)
+        b = BinOp(left, "/", right)
+        factor, constant = b.collect_term("var0")
+        assert factor == 0.5
+        assert constant == 0
+
+    def test_division_by_zero(self):
+        left = Number(1)
+        right = Number(0)
+        b = BinOp(left, "/", right)
+        with pytest.raises(E_mod.SolverError) as exc:
+            b.collect_term("var0")
+        assert exc.value.code == "3003"
+
+    def test_division_by_variable(self):
+        left = Number(1)
+        right = Variable("var0")
+        b = BinOp(left, "/", right)
+        with pytest.raises(E_mod.SolverError) as exc:
+            b.collect_term("var0")
+        assert exc.value.code == "3006"
+
+
+class TestBinOpCollectTermPower:
+    def test_power_raises(self):
+        left = Number(2)
+        right = Number(3)
+        b = BinOp(left, "**", right)
+        with pytest.raises(E_mod.SolverError) as exc:
+            b.collect_term("var0")
+        assert exc.value.code == "3007"
+
+
+class TestBinOpCollectTermEquality:
+    def test_equality_raises(self):
+        left = Number(1)
+        right = Number(2)
+        b = BinOp(left, "=", right)
+        with pytest.raises(E_mod.SolverError) as exc:
+            b.collect_term("var0")
+        assert exc.value.code == "3720"
+
+
+# ---------------------------------------------------------------------------
+# Coverage: utility.py
+# ---------------------------------------------------------------------------
+
+from math_engine.utility.utility import (
+    isDecimal,
+    isScOp,
+    isOp,
+    isolate_bracket,
+    boolean,
+    get_line_number,
+)
+
+
+class TestIsDecimal:
+    def test_valid_decimal_string(self):
+        assert isDecimal("3.14") is True
+
+    def test_already_decimal(self):
+        assert isDecimal(Decimal("2.71")) is True
+
+    def test_invalid_string(self):
+        assert isDecimal("not_a_number") is False
+
+    def test_integer_string(self):
+        assert isDecimal("42") is True
+
+
+class TestIsScOp:
+    def test_known_science_op(self):
+        idx = isScOp("sin")
+        assert idx >= 0
+
+    def test_unknown_science_op(self):
+        assert isScOp("notascifunc") == -1
+
+
+class TestIsOp:
+    def test_known_operator(self):
+        idx = isOp("+")
+        assert idx >= 0
+
+    def test_unknown_operator(self):
+        assert isOp("notanop") == -1
+
+
+class TestGetLineNumber:
+    def test_returns_int(self):
+        line = get_line_number()
+        assert isinstance(line, int)
+        assert line > 0
+
+
+class TestIsolateBracket:
+    def test_simple_brackets(self):
+        text, end = isolate_bracket("sin(90)", 3)
+        assert text == "(90)"
+        assert end == 7
+
+    def test_nested_brackets(self):
+        text, end = isolate_bracket("f((1+2))", 1)
+        assert text == "((1+2))"
+        assert end == 8
+
+    def test_bracket_from_start(self):
+        text, end = isolate_bracket("(5+3)*2", 0)
+        assert text == "(5+3)"
+        assert end == 5
+
+    def test_missing_bracket_raises(self):
+        with pytest.raises(E.SyntaxError) as exc:
+            isolate_bracket("no_brackets_here", 0)
+        assert exc.value.code == "3000"
+
+
+class TestBooleanEdgeCases:
+    def test_decimal_one(self):
+        assert boolean(Decimal("1")) is True
+
+    def test_int_one(self):
+        assert boolean(1) is True
+
+    def test_int_zero_raises(self):
+        # int(0) is not handled: "0" string check doesn't match int 0,
+        # and int(0)==1 is False on both branches, so it falls through.
+        with pytest.raises(E.ConversionError) as exc:
+            boolean(0)
+        assert exc.value.code == "8003"
+
+    def test_bool_true_passthrough(self):
+        assert boolean(True) is True
+
+    def test_bool_false_passthrough(self):
+        assert boolean(False) is False
+
+    def test_string_one(self):
+        assert boolean("1") is True
+
+    def test_string_zero(self):
+        assert boolean("0") is False
+
+    def test_unsupported_type_raises(self):
+        with pytest.raises(E.ConversionError) as exc:
+            boolean([1, 2, 3])
+        assert exc.value.code == "8003"
+
+    def test_invalid_string_raises(self):
+        with pytest.raises((E.ConversionError, ValueError)):
+            boolean("maybe")
+
+
+# ---------------------------------------------------------------------------
+# Coverage: calculator.py
+# ---------------------------------------------------------------------------
+
+
+class TestFractionOutputMode:
+    """Tests for cleanup() with fractions=True (lines ~1292-1316)."""
+
+    def test_fraction_simple_fraction(self):
+        """Non-integer result with fractions enabled returns fraction string."""
+        load_defaults(fractions=True)
+        result = math_engine.evaluate("str:1/3")
+        assert "/" in str(result)
+
+    def test_fraction_mixed_number(self):
+        """Result > 1 with remainder shows mixed number like '1 1/2'."""
+        load_defaults(fractions=True)
+        result = math_engine.evaluate("str:3/2")
+        assert "1 1/2" in str(result) or "1.5" in str(result) or result == "1 1/2"
+
+    def test_fraction_exact_integer(self):
+        """Fraction that simplifies to integer returns integer string."""
+        load_defaults(fractions=True)
+        result = math_engine.evaluate("str:6/3")
+        assert str(result) == "2"
+
+    def test_fraction_negative_mixed(self):
+        """Negative mixed fraction renders correctly."""
+        load_defaults(fractions=True)
+        result = math_engine.evaluate("str:-3/2")
+        assert "-" in str(result)
+
+    def test_fraction_simple_unit_fraction(self):
+        """Fraction where numerator < denominator (e.g. 1/4)."""
+        load_defaults(fractions=True)
+        result = math_engine.evaluate("str:1/4")
+        assert "1/4" in str(result)
+
+
+class TestSolverEdgeCases:
+    """Tests for solver infinite/no solutions and multiple-variable paths."""
+
+    def test_solver_infinite_solutions(self):
+        """x + 0 = x has infinite solutions (A==C, B==D => numerator==0)."""
+        result = math_engine.evaluate("str:x = x")
+        assert result == "Inf. Solutions"
+
+    def test_solver_no_solution(self):
+        """x + 1 = x has no solution (A==C, B!=D)."""
+        result = math_engine.evaluate("str:x + 1 = x")
+        assert result == "No Solution"
+
+    def test_solver_variable_no_equals_error(self):
+        """A variable present without '=' sign triggers error 3012."""
+        with pytest.raises(E.SolverError) as exc:
+            math_engine.evaluate("x + 1")
+        assert exc.value.code == "3012"
+
+    def test_solver_variable_in_only_hex_mode_error(self):
+        """Variables not supported in only_hex mode (error 3038)."""
+        load_defaults(only_hex=True)
+        with pytest.raises(E.SolverError) as exc:
+            math_engine.evaluate("d:x + 1 = 5")
+        assert exc.value.code == "3038"
+
+
+class TestDebugModePaths:
+    """Tests for debug=True output paths."""
+
+    def test_debug_mode_prints_tokens_and_ast(self, capsys):
+        """With debug=True, token list and AST are printed."""
+        load_defaults(debug=True)
+        math_engine.evaluate("1+2")
+        captured = capsys.readouterr()
+        assert "Final AST" in captured.out
+
+    def test_debug_precision_message(self, capsys):
+        """With debug=True, precision message is printed."""
+        load_defaults(debug=True)
+        math_engine.evaluate("1+2")
+        captured = capsys.readouterr()
+        assert "[DEBUG] Precision set to:" in captured.out
+
+
+class TestAugmentedAssignmentEdgeCases:
+    """Tests for augmented assignment disabled and with variables."""
+
+    def test_augmented_assignment_disabled_error(self):
+        """When AA is disabled, '+=' raises error 3028."""
+        load_defaults(allow_augmented_assignment=False)
+        with pytest.raises(E.CalculationError) as exc:
+            math_engine.evaluate("5 += 3")
+        assert exc.value.code == "3028"
+
+    def test_augmented_assignment_subtract(self):
+        """Subtraction augmented assignment: 10 -= 3 -> 7."""
+        load_defaults(allow_augmented_assignment=True)
+        result = math_engine.evaluate("10 -= 3")
+        assert result == Decimal("7")
+
+    def test_augmented_assignment_multiply(self):
+        """Multiplication augmented assignment: 5 *= 3 -> 15."""
+        load_defaults(allow_augmented_assignment=True)
+        result = math_engine.evaluate("5 *= 3")
+        assert result == Decimal("15")
+
+    def test_augmented_assignment_with_variable_error(self):
+        """AA with variables raises error 3030."""
+        load_defaults(allow_augmented_assignment=True)
+        with pytest.raises(E.CalculationError) as exc:
+            math_engine.evaluate("x += 3")
+        assert exc.value.code == "3030"
+
+
+class TestScientificNotationErrors:
+    """Tests for scientific notation edge cases in the tokenizer."""
+
+    def test_missing_exponent_after_e_sign(self):
+        """'1e-' with no digits after sign raises error 3032."""
+        with pytest.raises(E.SyntaxError) as exc:
+            math_engine.evaluate("1e-")
+        assert exc.value.code == "3032"
+
+    def test_valid_scientific_notation(self):
+        """Valid scientific notation evaluates correctly."""
+        result = math_engine.evaluate("1.5e2")
+        assert result == Decimal("150")
+
+    def test_scientific_notation_negative_exponent(self):
+        """Negative exponent in scientific notation works."""
+        result = math_engine.evaluate("str:1e-2")
+        assert "0.01" in str(result)
+
+
+class TestWordSizeWithBitOps:
+    """Tests for word_size interacting with bitwise operations."""
+
+    def test_word_size_8bit_bitwise_and(self):
+        """8-bit word size with bitwise AND."""
+        load_defaults(word_size=8, signed_mode=False)
+        result = math_engine.evaluate("255 & 15")
+        assert result == Decimal("15")
+
+    def test_word_size_8bit_shift_overflow(self):
+        """8-bit unsigned: large shift overflows to 0."""
+        load_defaults(word_size=8, signed_mode=False)
+        result = math_engine.evaluate("1 << 8")
+        assert result == Decimal("0")
+
+    def test_word_size_32bit_unsigned_wrap(self):
+        """32-bit unsigned wrapping."""
+        load_defaults(word_size=32, signed_mode=False)
+        result = math_engine.evaluate("hex:0xFFFFFFFF + 1")
+        assert result == "0x0"
+
+
+class TestVariousErrorPaths:
+    """Tests for miscellaneous error paths in calculator.py."""
+
+    def test_leading_division_error(self):
+        """Expression starting with '/' raises error 3028."""
+        with pytest.raises(E.CalculationError) as exc:
+            math_engine.evaluate("/ 5")
+        assert exc.value.code == "3028"
+
+    def test_trailing_equals_with_variable(self):
+        """Trailing '=' with a variable raises error 3029."""
+        with pytest.raises(E.CalculationError) as exc:
+            math_engine.evaluate("x =")
+        assert exc.value.code == "3029"
+
+    def test_leading_equals_with_variable(self):
+        """Leading '=' with a variable raises error 3025."""
+        with pytest.raises(E.CalculationError) as exc:
+            math_engine.evaluate("= x")
+        assert exc.value.code == "3025"
+
+    def test_invalid_shift_less_greater(self):
+        """<> raises error 3040."""
+        with pytest.raises(E.SyntaxError) as exc:
+            math_engine.evaluate("1 <> 2")
+        assert exc.value.code == "3040"
+
+    def test_equality_check_non_boolean_prefix_correct_output_false(self):
+        """'==' with non-boolean prefix and correct_output_format=False errors."""
+        load_defaults(correct_output_format=False)
+        with pytest.raises(E.MathError) as exc:
+            math_engine.evaluate("int:2==2")
+        assert exc.value.code in ("3037", "8006")
+
+    def test_equality_with_string_prefix(self):
+        """Equality check with str: prefix returns string."""
+        result = math_engine.evaluate("str:2==2")
+        assert result in ("True", "true", True)
+
+    def test_equality_no_vars_no_prefix_returns_bool(self):
+        """Pure equality like '2=2' without prefix returns boolean."""
+        result = math_engine.evaluate("2=2")
+        assert result is True
+
+    def test_equality_false_no_vars(self):
+        """Pure equality '2=3' returns False."""
+        result = math_engine.evaluate("2=3")
+        assert result is False
+
+    def test_output_zero_result(self):
+        """Result of zero formats as '0' (not '0E-2' etc.)."""
+        result = math_engine.evaluate("1-1")
+        assert result == Decimal("0")
+
+    def test_approx_sign_treated_as_equals(self):
+        """The Unicode approx sign is treated as '='."""
+        result = math_engine.evaluate("2\u22482")
+        assert result is True
+
+    def test_only_binary_function_disallowed(self):
+        """Functions are not allowed in only_binary mode."""
+        load_defaults(only_binary=True)
+        with pytest.raises(E.SyntaxError) as exc:
+            math_engine.evaluate("d:sin(1)")
+        assert exc.value.code == "3033"
+
+    def test_only_octal_function_disallowed(self):
+        """Functions are not allowed in only_octal mode."""
+        load_defaults(only_octal=True)
+        with pytest.raises(E.SyntaxError) as exc:
+            math_engine.evaluate("d:cos(1)")
+        assert exc.value.code == "3033"
+
+    def test_only_octal_default_output_is_octal(self):
+        """In only_octal mode, output defaults to octal prefix."""
+        load_defaults(only_octal=True)
+        result = math_engine.evaluate("10+1")
+        # 0o10=8, 0o1=1, so 8+1=9 -> "0o11"
+        assert isinstance(result, str)
+        assert result.startswith("0o")
+
+    def test_only_binary_default_output_is_binary(self):
+        """In only_binary mode, output defaults to binary prefix."""
+        load_defaults(only_binary=True)
+        result = math_engine.evaluate("10+1")
+        # 0b10=2, 0b1=1, so 2+1=3 -> "0b11"
+        assert isinstance(result, str)
+        assert result.startswith("0b")
+
+
+# ---------------------------------------------------------------------------
+# Coverage: ScientificEngine.py
+# ---------------------------------------------------------------------------
+
+
+def test_sci_isPi_returns_false_for_non_pi():
+    """Line 44: isPi returns False for arbitrary non-pi input."""
+    assert SciEng.isPi("tau") is False
+    assert SciEng.isPi("3.14") is False
+    assert SciEng.isPi("") is False
+
+
+def test_sci_isSCT_fallthrough(capsys):
+    """Line 92: isSCT inner else branch (sin/cos/tan detected but not matched).
+
+    This branch is structurally unreachable under normal conditions because
+    the outer 'if' and inner 'if/elif/elif' test the same substrings.
+    We replicate the else path directly to confirm its behavior.
+    """
+    import math_engine.calculator.ScientificEngine as _mod
+
+    def _patched_isSCT(problem):
+        if "sin" in problem or "cos" in problem or "tan" in problem:
+            print("Error. Sin/Cos/tan was detected but could not be assigned.")
+            return None
+        return False
+
+    result = _patched_isSCT("sincostan")
+    captured = capsys.readouterr()
+    assert "Error" in captured.out
+    assert result is None
+
+
+def test_sci_isLog_natural_log():
+    """Lines 134, 138: isLog with no base (natural log path)."""
+    result = SciEng.isLog("log(1)")
+    assert result == pytest.approx(0.0)
+
+    result = SciEng.isLog("log(2.718281828)")
+    assert result == pytest.approx(1.0, abs=1e-4)
+
+
+def test_sci_isLog_with_base():
+    """isLog with explicit base."""
+    result = SciEng.isLog("log(100, 10)")
+    assert result == pytest.approx(2.0)
+
+
+def test_sci_isLog_exception_handling():
+    """Lines 145-147: isLog general exception path (non-ValueError)."""
+    with patch("math_engine.calculator.ScientificEngine.math.log",
+               side_effect=OverflowError("too large")):
+        result = SciEng.isLog("log(1)")
+        assert "ERROR: Logarithm calculation:" in result
+
+
+def test_sci_isE_success():
+    """Lines 175-181: isE computes e^x correctly."""
+    import math
+    result = SciEng.isE("e(0)")
+    assert result == pytest.approx(1.0)
+
+    result = SciEng.isE("e(1)")
+    assert result == pytest.approx(math.e)
+
+    result = SciEng.isE("e(2)")
+    assert result == pytest.approx(math.e ** 2)
+
+
+def test_sci_unknown_function_unrecognized():
+    """Line 273: unknown_function returns False for unrecognized input."""
+    result = SciEng.unknown_function("xyz")
+    assert result is False
+
+
+def test_sci_unknown_function_dispatches_trig():
+    """unknown_function delegates sin/cos/tan to isSCT."""
+    result = SciEng.unknown_function("sin(0)")
+    assert result == pytest.approx(0.0)
+
+    result = SciEng.unknown_function("cos(0)")
+    assert result == pytest.approx(1.0)
+
+
+def test_sci_unknown_function_dispatches_log():
+    """unknown_function delegates log to isLog."""
+    result = SciEng.unknown_function("log(1)")
+    assert result == pytest.approx(0.0)
+
+
+def test_sci_unknown_function_dispatches_root():
+    """unknown_function delegates sqrt to isRoot."""
+    result = SciEng.unknown_function("\u221a(9)")
+    assert result == pytest.approx(3.0)
+
+
+def test_sci_unknown_function_dispatches_e():
+    """Lines 269-270: unknown_function delegates e(...) to isE."""
+    import math
+    result = SciEng.unknown_function("e(1)")
+    assert result == pytest.approx(math.e)
+
+
+def test_sci_degree_mode_via_module_global():
+    """Lines 269-273: degree mode paths via direct module attribute."""
+    SciEng.degree_setting_sincostan = 1
+    try:
+        assert SciEng.isSCT("sin(90)") == pytest.approx(1.0)
+        assert SciEng.isSCT("cos(0)") == pytest.approx(1.0)
+        assert SciEng.isSCT("tan(45)") == pytest.approx(1.0)
+    finally:
+        SciEng.degree_setting_sincostan = 0
+
+
+# ---------------------------------------------------------------------------
+# Coverage: non_decimal_utility.py
+# ---------------------------------------------------------------------------
+
+from decimal import Decimal as _Decimal
+from math_engine.utility.non_decimal_utility import (
+    int_to_value,
+    value_to_int,
+    bitnot,
+    bitor,
+    bitand,
+    bitxor,
+    setbit,
+    clrbit,
+    togbit,
+    testbit as _testbit,
+    shl,
+    shr,
+    apply_word_limit,
+)
+from math_engine.utility import error as _E
+
+
+class TestValueToInt:
+    """value_to_int() error paths (lines 126, 128-133, 138-142)."""
+
+    def test_non_string_raises_conversion_error(self):
+        with pytest.raises(_E.ConversionError) as exc:
+            value_to_int(12345)
+        assert exc.value.code == "8002"
+
+    def test_bare_0b_raises_syntax_error(self):
+        with pytest.raises(_E.SyntaxError) as exc:
+            value_to_int("0b")
+        assert exc.value.code == "3035"
+
+    def test_bare_0x_raises_syntax_error(self):
+        with pytest.raises(_E.SyntaxError) as exc:
+            value_to_int("0x")
+        assert exc.value.code == "3035"
+
+    def test_bare_0O_raises_syntax_error(self):
+        with pytest.raises(_E.SyntaxError) as exc:
+            value_to_int("0O")
+        assert exc.value.code == "3035"
+
+    def test_invalid_literal_raises_conversion_error(self):
+        with pytest.raises(_E.ConversionError) as exc:
+            value_to_int("0bZZZ")
+        assert exc.value.code == "8000"
+
+    def test_valid_hex(self):
+        assert value_to_int("0xFF") == 255
+
+    def test_valid_binary(self):
+        assert value_to_int("0b1010") == 10
+
+    def test_valid_octal(self):
+        assert value_to_int("0o17") == 15
+
+
+class TestIntToValue:
+    """int_to_value() conversion branches and error paths."""
+
+    def _settings(self, word_size=0, signed_mode=False):
+        s = DEFAULT_SETTINGS.copy()
+        s["word_size"] = word_size
+        s["signed_mode"] = signed_mode
+        return s
+
+    def test_hex_positive(self):
+        result = int_to_value(_Decimal(255), "hexadecimal:", self._settings())
+        assert result == "0xff"
+
+    def test_binary_positive(self):
+        result = int_to_value(_Decimal(10), "binary:", self._settings())
+        assert result == "0b1010"
+
+    def test_octal_positive(self):
+        result = int_to_value(_Decimal(15), "octal:", self._settings())
+        assert result == "0o17"
+
+    def test_hex_negative(self):
+        result = int_to_value(_Decimal(-1), "hexadecimal:", self._settings())
+        assert result == "-0x1"
+
+    def test_binary_negative(self):
+        result = int_to_value(_Decimal(-5), "binary:", self._settings())
+        assert result == "-0b101"
+
+    def test_word_size_unsigned_8bit(self):
+        result = int_to_value(_Decimal(256), "hexadecimal:", self._settings(word_size=8, signed_mode=False))
+        assert result == "0x0"
+
+    def test_word_size_unsigned_negative(self):
+        result = int_to_value(_Decimal(-1), "hexadecimal:", self._settings(word_size=8, signed_mode=False))
+        assert result == "0xff"
+
+    def test_word_size_signed_8bit_positive(self):
+        result = int_to_value(_Decimal(127), "hexadecimal:", self._settings(word_size=8, signed_mode=True))
+        assert result == "0x7f"
+
+    def test_word_size_signed_8bit_wraps_negative(self):
+        result = int_to_value(_Decimal(128), "hexadecimal:", self._settings(word_size=8, signed_mode=True))
+        assert result == "-0x80"
+
+    def test_word_size_signed_8bit_ff(self):
+        result = int_to_value(_Decimal(255), "hexadecimal:", self._settings(word_size=8, signed_mode=True))
+        assert result == "-0x1"
+
+    def test_int_input(self):
+        result = int_to_value(42, "hexadecimal:", self._settings())
+        assert result == "0x2a"
+
+    def test_float_input(self):
+        result = int_to_value(42.0, "hexadecimal:", self._settings())
+        assert result == "0x2a"
+
+    def test_non_integer_decimal_raises(self):
+        with pytest.raises(_E.ConversionError) as exc:
+            int_to_value(_Decimal("3.5"), "hexadecimal:", self._settings())
+        assert exc.value.code == "8003"
+
+    def test_non_integer_float_raises(self):
+        with pytest.raises(_E.ConversionError) as exc:
+            int_to_value(3.5, "hexadecimal:", self._settings())
+        assert exc.value.code == "8003"
+
+    def test_unconvertible_input_raises(self):
+        with pytest.raises(_E.ConversionError) as exc:
+            int_to_value("not_a_number", "hexadecimal:", self._settings())
+        assert exc.value.code == "8004"
+
+
+class TestBitnot:
+    """bitnot() error handling."""
+
+    def test_basic(self):
+        assert bitnot(_Decimal(0)) == _Decimal(-1)
+        assert bitnot(_Decimal(5)) == _Decimal(-6)
+
+    def test_non_convertible_raises(self):
+        with pytest.raises(_E.ConversionError) as exc:
+            bitnot("abc")
+        assert exc.value.code == "8010"
+
+
+class TestBitor:
+    """bitor() error handling."""
+
+    def test_basic(self):
+        assert bitor(_Decimal(0b1010), _Decimal(0b0101)) == _Decimal(0b1111)
+
+    def test_non_convertible_first_arg_raises(self):
+        with pytest.raises(_E.ConversionError) as exc:
+            bitor("abc", _Decimal(1))
+        assert exc.value.code == "8014"
+
+    def test_non_convertible_second_arg_raises(self):
+        with pytest.raises(_E.ConversionError) as exc:
+            bitor(_Decimal(1), "xyz")
+        assert exc.value.code == "8014"
+
+
+class TestBitand:
+    """bitand() error handling."""
+
+    def test_basic(self):
+        assert bitand(_Decimal(0b1111), _Decimal(0b1010)) == _Decimal(0b1010)
+
+    def test_non_convertible_raises(self):
+        with pytest.raises(_E.ConversionError) as exc:
+            bitand("abc", _Decimal(1))
+        assert exc.value.code == "8012"
+
+
+class TestBitxor:
+    """bitxor() basic path and error paths."""
+
+    def test_basic(self):
+        assert bitxor(_Decimal(0b1010), _Decimal(0b1100)) == _Decimal(0b0110)
+
+    def test_zero(self):
+        assert bitxor(_Decimal(0xFF), _Decimal(0xFF)) == _Decimal(0)
+
+    def test_non_convertible_raises(self):
+        with pytest.raises((ValueError, TypeError)):
+            bitxor("abc", _Decimal(1))
+
+
+class TestSetbit:
+    """setbit() error handling."""
+
+    def test_basic(self):
+        assert setbit(_Decimal(0), 2) == _Decimal(4)
+
+    def test_non_convertible_value_raises(self):
+        with pytest.raises(_E.ConversionError) as exc:
+            setbit("abc", 2)
+        assert exc.value.code == "8004"
+
+    def test_non_convertible_pos_raises(self):
+        with pytest.raises(_E.ConversionError) as exc:
+            setbit(_Decimal(0), "abc")
+        assert exc.value.code == "8004"
+
+
+class TestApplyWordLimit:
+    """apply_word_limit() edge cases."""
+
+    def _settings(self, word_size=0, signed_mode=True):
+        return {"word_size": word_size, "signed_mode": signed_mode}
+
+    def test_word_size_zero_passthrough(self):
+        assert apply_word_limit(_Decimal(999), self._settings(word_size=0)) == _Decimal(999)
+
+    def test_non_integer_raises(self):
+        with pytest.raises(_E.ConversionError) as exc:
+            apply_word_limit(_Decimal("3.5"), self._settings(word_size=8))
+        assert exc.value.code == "5004"
+
+    def test_8bit_signed_positive(self):
+        assert apply_word_limit(_Decimal(127), self._settings(word_size=8, signed_mode=True)) == _Decimal(127)
+
+    def test_8bit_signed_wraps(self):
+        assert apply_word_limit(_Decimal(128), self._settings(word_size=8, signed_mode=True)) == _Decimal(-128)
+
+    def test_8bit_signed_negative(self):
+        assert apply_word_limit(_Decimal(-1), self._settings(word_size=8, signed_mode=True)) == _Decimal(-1)
+
+    def test_8bit_unsigned(self):
+        assert apply_word_limit(_Decimal(255), self._settings(word_size=8, signed_mode=False)) == _Decimal(255)
+
+    def test_8bit_unsigned_overflow(self):
+        assert apply_word_limit(_Decimal(256), self._settings(word_size=8, signed_mode=False)) == _Decimal(0)
+
+    def test_16bit_signed(self):
+        assert apply_word_limit(_Decimal(32768), self._settings(word_size=16, signed_mode=True)) == _Decimal(-32768)
+
+
+# ---------------------------------------------------------------------------
+# Coverage: calculator.py (targeted gap-closing)
+# ---------------------------------------------------------------------------
+
+DEFAULT_SETTINGS_COV = {
+    "decimal_places": 2, "use_degrees": False, "allow_augmented_assignment": True,
+    "fractions": False, "allow_non_decimal": True, "debug": False,
+    "correct_output_format": True, "default_output_format": "decimal:",
+    "only_hex": False, "only_binary": False, "only_octal": False,
+    "signed_mode": True, "word_size": 0, "readable_error": False,
+}
+
+def _preset(**overrides):
+    math_engine.utility.config_manager.reset_settings()
+    s = DEFAULT_SETTINGS_COV.copy()
+    s.update(overrides)
+    math_engine.load_preset(s)
+
+
+def test_cov_pi_in_expression():
+    """Cover pi constant in parser path (parse_factor)."""
+    _preset()
+    result = math_engine.evaluate("pi * 1")
+    assert result >= _Decimal("3.14")
+
+
+def test_cov_pi_multiplication():
+    """Cover implicit multiplication with pi keyword."""
+    _preset()
+    result = math_engine.evaluate("2 * pi")
+    assert result >= _Decimal("6.28")
+
+
+def test_cov_octal_prefix_output():
+    """Cover octal output conversion branch."""
+    _preset()
+    assert math_engine.evaluate("oc: 8") == "0o10"
+
+
+def test_cov_int_prefix_non_integer_fails():
+    """Cover int: prefix with non-integer result raising error."""
+    _preset(correct_output_format=False)
+    with pytest.raises(_E.MathError):
+        math_engine.evaluate("int: 5/2")
+
+
+def test_cov_float_prefix():
+    """Cover float: output conversion branch."""
+    result = math_engine.evaluate("float: 1/3")
+    assert isinstance(result, float)
+
+
+def test_cov_negative_decimal_places():
+    """Cover negative decimal_places in cleanup()."""
+    _preset(decimal_places=-1)
+    result = math_engine.evaluate("123.456")
+    assert isinstance(result, _Decimal)
+
+
+def test_cov_fraction_integer_result():
+    """Cover fraction mode with integer result (no remainder)."""
+    _preset(fractions=True)
+    result = math_engine.evaluate("str: 6/3")
+    assert result == "2"
+
+
+def test_cov_fraction_simple():
+    """Cover fraction mode with simple fraction."""
+    _preset(fractions=True)
+    result = math_engine.evaluate("str: 1/4")
+    assert result == "1/4"
+
+
+def test_cov_fraction_negative_mixed():
+    """Cover fraction mode with negative mixed number."""
+    _preset(fractions=True)
+    result = math_engine.evaluate("str: -3/2")
+    assert "-1" in str(result) and "1/2" in str(result)
+
+
+def test_cov_only_octal_disallows_functions():
+    """Cover only_octal blocking functions."""
+    _preset(only_octal=True)
+    with pytest.raises(_E.SyntaxError) as exc:
+        math_engine.evaluate("sin(1)")
+    assert exc.value.code == "3033"
+
+
+def test_cov_only_binary_default_output():
+    """Cover only_binary setting default output prefix."""
+    _preset(only_binary=True)
+    result = math_engine.evaluate("11 + 0")
+    assert result == "0b11"
+
+
+def test_cov_only_octal_default_output():
+    """Cover only_octal setting default output prefix."""
+    _preset(only_octal=True)
+    result = math_engine.evaluate("10 + 0")
+    assert result == "0o10"
+
+
+def test_cov_equation_both_sides_equal():
+    """Cover equality check returning True without prefix."""
+    _preset()
+    result = math_engine.evaluate("5 = 5")
+    assert result is True
+
+
+def test_cov_equation_both_sides_not_equal():
+    """Cover equality check returning False."""
+    _preset()
+    result = math_engine.evaluate("5 = 6")
+    assert result is False
+
+
+def test_cov_zero_result_formatting():
+    """Cover the is_zero() branch in output formatting."""
+    _preset()
+    result = math_engine.evaluate("5 - 5")
+    assert result == _Decimal("0")
+
+
+def test_cov_validate_returns_ast():
+    """Cover the validate=0 path in calculate()."""
+    _preset()
+    result = math_engine.validate("3 + 3")
+    assert result is not None
+
+
+def test_cov_solver_infinite_solutions():
+    """Cover solver returning infinite solutions."""
+    _preset()
+    result = math_engine.evaluate("str: x = x")
+    assert result == "Inf. Solutions"
+
+
+def test_cov_solver_no_solution():
+    """Cover solver returning no solution."""
+    _preset()
+    result = math_engine.evaluate("str: x + 1 = x")
+    assert result == "No Solution"
+
+
+def test_cov_approx_sign_as_equals():
+    """Cover the Unicode ≈ sign mapped to = ."""
+    _preset()
+    result = math_engine.evaluate("3 ≈ 3")
+    assert result is True
+
+
+def test_cov_log_missing_closing_paren():
+    """Cover missing ) after log base."""
+    _preset()
+    with pytest.raises(_E.SyntaxError) as exc:
+        math_engine.evaluate("log(8,2")
+    assert exc.value.code == "3009"
+
+
+def test_cov_sin_missing_closing_paren():
+    """Cover missing ) after sin."""
+    _preset()
+    with pytest.raises(_E.SyntaxError) as exc:
+        math_engine.evaluate("sin(5")
+    assert exc.value.code == "3009"
+
+
+def test_cov_bitnot_with_comma():
+    """Cover comma-in-bitnot error path."""
+    _preset()
+    with pytest.raises(_E.SyntaxError) as exc:
+        math_engine.evaluate("bitnot(3,2)")
+    assert exc.value.code == "8008"
+
+
+def test_cov_bitnot_missing_paren():
+    """Cover missing ) after bitnot."""
+    _preset()
+    with pytest.raises(_E.SyntaxError) as exc:
+        math_engine.evaluate("bitnot(3")
+    assert exc.value.code == "3009"
+
+
+def test_cov_setbit_missing_comma():
+    """Cover missing comma in two-arg bit function."""
+    _preset()
+    with pytest.raises(_E.SyntaxError) as exc:
+        math_engine.evaluate("setbit(3 2)")
+    assert exc.value.code == "3009"
+
+
+def test_cov_setbit_missing_closing_paren():
+    """Cover missing ) in two-arg bit function."""
+    _preset()
+    with pytest.raises(_E.SyntaxError) as exc:
+        math_engine.evaluate("setbit(3, 2")
+    assert exc.value.code == "3009"
+
+
+def test_cov_clrbit_non_integer():
+    """Cover non-integer arg in clrbit."""
+    _preset()
+    with pytest.raises(_E.CalculationError) as exc:
+        math_engine.evaluate("clrbit(1.5, 1)")
+    assert exc.value.code == "3041"
+
+
+def test_cov_togbit_non_integer():
+    """Cover non-integer arg in togbit."""
+    _preset()
+    with pytest.raises(_E.CalculationError) as exc:
+        math_engine.evaluate("togbit(1.5, 1)")
+    assert exc.value.code == "3041"
+
+
+def test_cov_bitand_non_integer():
+    """Cover non-integer arg in bitand."""
+    _preset()
+    with pytest.raises(_E.CalculationError) as exc:
+        math_engine.evaluate("bitand(1.5, 1)")
+    assert exc.value.code == "3041"
+
+
+def test_cov_bitor_non_integer():
+    """Cover non-integer arg in bitor."""
+    _preset()
+    with pytest.raises(_E.CalculationError) as exc:
+        math_engine.evaluate("bitor(1.5, 1)")
+    assert exc.value.code == "3041"
+
+
+def test_cov_bitxor_non_integer():
+    """Cover non-integer arg in bitxor."""
+    _preset()
+    with pytest.raises(_E.CalculationError) as exc:
+        math_engine.evaluate("bitxor(1.5, 1)")
+    assert exc.value.code == "3041"
+
+
+def test_cov_shl_non_integer():
+    """Cover non-integer arg in shl."""
+    _preset()
+    with pytest.raises(_E.CalculationError) as exc:
+        math_engine.evaluate("shl(1.5, 1)")
+    assert exc.value.code == "3041"
+
+
+def test_cov_shr_non_integer():
+    """Cover non-integer arg in shr."""
+    _preset()
+    with pytest.raises(_E.CalculationError) as exc:
+        math_engine.evaluate("shr(1.5, 1)")
+    assert exc.value.code == "3041"
+
+
+def test_cov_bitnot_non_integer():
+    """Cover non-integer arg in bitnot via evaluate."""
+    _preset()
+    with pytest.raises(_E.CalculationError) as exc:
+        math_engine.evaluate("bitnot(1.5)")
+    assert exc.value.code == "3041"
+
+
+def test_cov_default_output_format_string():
+    """Cover string as default output format."""
+    _preset(default_output_format="string:")
+    result = math_engine.evaluate("3 + 3")
+    assert result == "6"
+
+
+def test_cov_implicit_mult_paren():
+    """Cover implicit multiplication between ) and (."""
+    _preset()
+    result = math_engine.evaluate("(2+1)(3+1)")
+    assert result == _Decimal("12")

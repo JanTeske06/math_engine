@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.6] - 2026-04-13
+
+### Added
+- **Extended Test Suite:** Added 165 new test cases (234 → 399), covering utility helpers, AST nodes, scientific functions, bit operations, solver edge cases, and calculator error paths.
+- **90% Code Coverage:** Improved test coverage from 69% to 90% by targeting uncovered branches and excluding unused modules (`translator.py`, `plugin_manager.py`).
+
+### Fixed
+- **Coverage configuration:** Corrected omit paths for `plugin_manager.py` and excluded the unused `translator.py` duplicate from coverage reporting.
+- **pytest collection:** Prevented pytest from collecting `testbit()` as a test function via import alias.
+
+---
+
 ## [0.6.5] - 2026-04-09
 
 ### Added
