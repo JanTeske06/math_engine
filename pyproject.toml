@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "math-engine"
-version = "0.6.6"
+version = "0.6.7"
 authors = [
   { name="Jan Teske", email="jan.teske.06@gmail.com" },
 ]
@@ -31,6 +31,7 @@ start = "math_engine.cli:main"
 Homepage = "https://github.com/JanTeske06/math_engine"
 Source = "https://github.com/JanTeske06/math_engine"
 Changelog = "https://github.com/JanTeske06/math_engine/blob/master/CHANGELOG.md"
+Website = "https://teske-systemtechnik.de/en/projects/math-engine/"
 
 [project.optional-dependencies]
 test = [

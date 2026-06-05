@@ -31,7 +31,7 @@ from typing import Optional
 from typing import Union
 from typing import Any, Mapping
 
-__version__ = "0.6.6"
+__version__ = "0.6.7"
 
 # ---------------------------------------------------------------------------
 # In-memory variable store

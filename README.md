@@ -1,11 +1,13 @@
 
-# Math Engine v0.6.6 
+# Math Engine v0.6.7 
 
 
 [![PyPI version](https://badge.fury.io/py/math-engine.svg)](https://badge.fury.io/py/math-engine)
 [![Python Versions](https://img.shields.io/pypi/pyversions/math-engine.svg)](https://pypi.org/project/math-engine/)
 [![codecov](https://codecov.io/gh/JanTeske06/math_engine/graph/badge.svg)](https://codecov.io/gh/JanTeske06/math_engine)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/math-engine?period=total&units=NONE&left_color=GREY&right_color=BLACK&left_text=downloads)](https://pepy.tech/projects/math-engine)
+
+📖 **Project page & case study:** [teske-systemtechnik.de](https://teske-systemtechnik.de/en/projects/math-engine/)
 
 
 A fast, safe, configurable expression parser and calculator for Python.
